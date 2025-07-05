@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>focusPet</title>
+  <style>
+    body {
+      width: 400px;
+      min-height: 500px;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .popup-container {
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      margin: 0 0 15px 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .tab-buttons {
+      display: flex;
+      gap: 5px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 4px;
+    }
+
+    .tab-buttons button {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      background: transparent;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .tab-buttons button.active {
+      background: rgba(255, 255, 255, 0.2);
+      font-weight: 500;
+    }
+
+    .content {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      font-size: 16px;
+    }
+
+    /* Pet Tab Styles */
+    .pet-info {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .pet-info h2 {
+      margin: 0 0 10px 0;
+      font-size: 20px;
+    }
+
+    .pet-info p {
+      margin: 5px 0;
+      opacity: 0.9;
+    }
+
+    .pet-stats {
+      margin-bottom: 20px;
+    }
+
+    .stat {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 10px;
+    }
+
+    .stat label {
+      min-width: 80px;
+      font-size: 14px;
+    }
+
+    .progress-bar {
+      flex: 1;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4CAF50, #8BC34A);
+      transition: width 0.3s ease;
+    }
+
+    .stat span {
+      min-width: 40px;
+      text-align: right;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .pet-actions {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .feed-button {
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .feed-button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+    }
+
+    .feed-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pet-animations h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+
+    .animation-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .animation-tag {
+      padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    /* Reminders Tab Styles */
+    .preset-reminders {
+      margin-bottom: 25px;
+    }
+
+    .preset-reminders h3 {
+      margin: 0 0 15px 0;
+      font-size: 16px;
+    }
+
+    .preset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .preset-button {
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+
+    .preset-button:hover {
+      background: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .preset-button strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .preset-button span {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .active-reminders h3 {
+      margin: 0 0 15px 0;
+      font-size: 16px;
+    }
+
+    .reminder-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .reminder-item {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .reminder-info h4 {
+      margin: 0 0 5px 0;
+      font-size: 14px;
+    }
+
+    .reminder-info p {
+      margin: 0 0 8px 0;
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    .reminder-info small {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+
+    .reminder-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .reminder-actions button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .reminder-actions button.active {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .reminder-actions button.inactive {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+    }
+
+    .delete-button {
+      background: #F44336 !important;
+      color: white !important;
+    }
+
+    /* Settings Tab Styles */
+    .settings-tab h3 {
+      margin: 20px 0 15px 0;
+      font-size: 16px;
+    }
+
+    .settings-tab h3:first-child {
+      margin-top: 0;
+    }
+
+    .setting-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .setting-item:last-child {
+      border-bottom: none;
+    }
+
+    .setting-item label {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .setting-item span {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .settings-note {
+      margin-top: 20px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      font-size: 12px;
+      text-align: center;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="../../src/popup/popup.tsx"></script>
+</body>
+</html> 

@@ -1,0 +1,226 @@
+/* focusPet Overlay Styles */
+
+#focuspet-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2147483647;
+  background: transparent;
+}
+
+/* Make pet area clickable */
+#focuspet-overlay {
+  pointer-events: auto;
+}
+
+/* Speech bubble styles */
+.focuspet-speech-bubble {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid #333;
+  border-radius: 12px;
+  padding: 12px 16px;
+  max-width: 200px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  color: #333;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: speechBubbleIn 0.3s ease-out;
+  z-index: 2147483646;
+}
+
+@keyframes speechBubbleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Mood indicator styles */
+.focuspet-mood-indicator {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  animation: moodPulse 2s ease-in-out infinite;
+}
+
+@keyframes moodPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* Pet interaction area */
+.focuspet-interaction-area {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 2147483645;
+}
+
+.focuspet-interaction-area:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.1);
+}
+
+/* Treat animation */
+.focuspet-treat-animation {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: url('chrome-extension://__MSG_@@extension_id__/assets/treat.png') no-repeat center;
+  background-size: contain;
+  animation: treatFloat 2s ease-out forwards;
+  z-index: 2147483644;
+}
+
+@keyframes treatFloat {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-50px) scale(0.5);
+  }
+}
+
+/* Pet walking animation */
+.focuspet-walking {
+  animation: petWalk 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes petWalk {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-2px);
+  }
+}
+
+/* Pet excited animation */
+.focuspet-excited {
+  animation: petExcited 0.3s ease-in-out infinite alternate;
+}
+
+@keyframes petExcited {
+  from {
+    transform: scale(1) rotate(0deg);
+  }
+  to {
+    transform: scale(1.1) rotate(5deg);
+  }
+}
+
+/* Pet worried animation */
+.focuspet-worried {
+  animation: petWorried 1s ease-in-out infinite;
+}
+
+@keyframes petWorried {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px);
+  }
+  75% {
+    transform: translateX(2px);
+  }
+}
+
+/* Pet sad animation */
+.focuspet-sad {
+  animation: petSad 2s ease-in-out infinite;
+}
+
+@keyframes petSad {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+/* Pet sleeping animation */
+.focuspet-sleeping {
+  animation: petSleep 3s ease-in-out infinite;
+}
+
+@keyframes petSleep {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .focuspet-speech-bubble {
+    max-width: 150px;
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+  
+  .focuspet-mood-indicator {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .focuspet-interaction-area {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .focuspet-speech-bubble {
+    background: white;
+    border-color: black;
+    color: black;
+  }
+  
+  .focuspet-interaction-area {
+    border-color: white;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .focuspet-walking,
+  .focuspet-excited,
+  .focuspet-worried,
+  .focuspet-sad,
+  .focuspet-sleeping,
+  .focuspet-mood-indicator {
+    animation: none;
+  }
+  
+  .focuspet-treat-animation {
+    animation: treatFloat 1s ease-out forwards;
+  }
+} 
