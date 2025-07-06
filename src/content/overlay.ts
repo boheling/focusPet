@@ -78,7 +78,7 @@ class PetOverlay {
         
         // Add error handling and logging
         img.onload = () => {
-          // Silent loading - remove verbose logging
+          // Silent loading
         };
         img.onerror = () => {
           console.error(`focusPet: Failed to load sprite ${spriteKey}`);
@@ -194,6 +194,7 @@ class PetOverlay {
       this.ctx.restore();
     } else {
       // Fallback: draw a simple colored circle
+      console.log(`focusPet: Using fallback rendering for ${spriteKey}`);
       this.renderFallbackPet();
     }
   }

@@ -33,6 +33,8 @@ export class PetEngine {
     if (this.petState.unlockedAnimations.includes(animation)) {
       this.petState.currentAnimation = animation;
       this.updatePetState({ currentAnimation: animation });
+    } else {
+      console.log(`focusPet: Animation '${animation}' not unlocked. Available: ${this.petState.unlockedAnimations.join(', ')}`);
     }
   }
 
@@ -169,6 +171,7 @@ export class PetEngine {
     // Nap after 2 minutes of inactivity
     if (timeSinceInteraction > 120000) { // 2 minutes
       if (this.petState.currentAnimation !== 'nap') {
+        console.log(`focusPet: Pet inactive for ${Math.floor(timeSinceInteraction / 1000)}s, setting to nap`);
         this.setAnimation('nap');
       }
       // Energy restoration while napping
