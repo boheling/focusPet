@@ -163,13 +163,20 @@ export class StorageManager {
         energy: 100,
         hunger: 50,
         treats: 5,
-        unlockedAnimations: ['idle', 'walk', 'sit'],
+        unlockedAnimations: ['idle', 'walk', 'sit', 'nap'],
         accessories: [],
         position: { x: 100, y: 100 },
         currentAnimation: 'idle',
         lastInteraction: Date.now(),
       };
       await this.setPetState(defaultPetState);
+    } else {
+      // Ensure existing pets have nap animation unlocked
+      if (!petState.unlockedAnimations.includes('nap')) {
+        console.log('focusPet: Adding nap animation to existing pet');
+        petState.unlockedAnimations.push('nap');
+        await this.setPetState(petState);
+      }
     }
 
     const userSettings = await this.getUserSettings();

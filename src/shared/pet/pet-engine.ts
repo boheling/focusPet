@@ -8,6 +8,7 @@ export class PetEngine {
   private mousePosition: Position = { x: 0, y: 0 };
 
   constructor(initialPetState: PetState) {
+    console.log('focusPet: Creating PetEngine with state:', initialPetState);
     this.petState = initialPetState;
     this.startBehaviorLoop();
   }
@@ -31,9 +32,13 @@ export class PetEngine {
 
   // Animation management
   setAnimation(animation: PetAnimation): void {
+    console.log(`focusPet: setAnimation called with '${animation}', unlocked: ${this.petState.unlockedAnimations.includes(animation)}`);
     if (this.petState.unlockedAnimations.includes(animation)) {
+      console.log(`focusPet: Setting animation to '${animation}'`);
       this.petState.currentAnimation = animation;
       this.updatePetState({ currentAnimation: animation });
+    } else {
+      console.log(`focusPet: Animation '${animation}' not unlocked. Available: ${this.petState.unlockedAnimations.join(', ')}`);
     }
   }
 
@@ -46,14 +51,15 @@ export class PetEngine {
   // Mouse interaction
   onMouseMove(x: number, y: number): void {
     this.mousePosition = { x, y };
-    
+    // Do not move if napping
+    if (this.petState.currentAnimation === 'nap') return;
     // Pet follows cursor if close enough, but not when napping
     const distance = Math.sqrt(
       Math.pow(x - this.petState.position.x, 2) + 
       Math.pow(y - this.petState.position.y, 2)
     );
 
-    if (distance < 200 && this.petState.mood !== 'neglected' && this.petState.currentAnimation !== 'nap') {
+    if (distance < 200 && this.petState.mood !== 'neglected') {
       this.moveTowardsMouse();
     }
   }
@@ -133,7 +139,8 @@ export class PetEngine {
 
   // Movement
   private moveTowardsMouse(): void {
-    // const speed = 2; // Unused variable
+    // Do not move if napping
+    if (this.petState.currentAnimation === 'nap') return;
     const dx = this.mousePosition.x - this.petState.position.x;
     const dy = this.mousePosition.y - this.petState.position.y;
     
@@ -151,6 +158,7 @@ export class PetEngine {
 
   // Behavior loop
   private startBehaviorLoop(): void {
+    console.log('focusPet: Starting behavior loop (runs every 30 seconds)');
     this.behaviorTimer = window.setInterval(() => {
       this.updatePetBehavior();
     }, 30000); // Update every 30 seconds
@@ -159,6 +167,7 @@ export class PetEngine {
   private async updatePetBehavior(): Promise<void> {
     const now = Date.now();
     const timeSinceInteraction = now - this.petState.lastInteraction;
+    console.log(`focusPet: Behavior update - inactive for ${Math.floor(timeSinceInteraction / 1000)}s, current animation: ${this.petState.currentAnimation}`);
 
     // Decrease happiness over time if not interacted with
     if (timeSinceInteraction > 300000) { // 5 minutes
@@ -167,19 +176,27 @@ export class PetEngine {
 
     // Nap after 2 minutes of inactivity
     if (timeSinceInteraction > 120000) { // 2 minutes
+      console.log(`focusPet: Pet inactive for ${Math.floor(timeSinceInteraction / 1000)}s, should nap`);
       if (this.petState.currentAnimation !== 'nap') {
+        console.log('focusPet: Setting pet to nap animation');
         this.setAnimation('nap');
       }
       // Energy restoration while napping
       const idleMinutes = Math.floor(timeSinceInteraction / 60000);
       const energyGain = Math.min(3, idleMinutes); // Max 3 energy per 30-second cycle
       this.petState.energy = Math.min(100, this.petState.energy + energyGain);
+      // Do NOT perform random behaviors while napping
     } else {
       // Decrease energy if recently interacted with (pet is active)
       this.petState.energy = Math.max(0, this.petState.energy - 1);
       // Return to idle if was napping but now active
       if (this.petState.currentAnimation === 'nap') {
         this.setAnimation('idle');
+      }
+      // Random behaviors (sit/play) if not napping
+      if (Math.random() < 0.3 && this.petState.currentAnimation !== 'nap') {
+        console.log('focusPet: Performing random behavior');
+        this.performRandomBehavior();
       }
     }
 
@@ -188,11 +205,6 @@ export class PetEngine {
 
     // Update mood based on stats
     this.updateMood();
-
-    // Random behaviors (sit/play) if not napping
-    if (Math.random() < 0.3 && this.petState.currentAnimation !== 'nap') {
-      this.performRandomBehavior();
-    }
 
     try {
       await this.updatePetState({
