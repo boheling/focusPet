@@ -67,6 +67,7 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
         break;
 
       case 'CREATE_PRESET_REMINDER':
+        console.log('CREATE_PRESET_REMINDER called with:', message.reminderType);
         const presetReminder = await reminderManager.createPresetReminder(message.reminderType);
         sendResponse({ success: true, data: presetReminder });
         break;

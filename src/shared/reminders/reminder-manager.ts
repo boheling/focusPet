@@ -34,6 +34,13 @@ export class ReminderManager {
 
   // Create a new reminder
   async createReminder(reminderData: Omit<Reminder, 'id' | 'createdAt'>): Promise<Reminder> {
+    // Validation: prevent empty title or message
+    if (!reminderData.title || !reminderData.title.trim()) {
+      throw new Error('Reminder title cannot be empty.');
+    }
+    if (!reminderData.message || !reminderData.message.trim()) {
+      throw new Error('Reminder message cannot be empty.');
+    }
     const reminder: Reminder = {
       ...reminderData,
       id: this.generateId(),
@@ -292,8 +299,11 @@ export class ReminderManager {
         visualEnabled: true
       }
     };
-
-    return this.createReminder(presets[type]);
+    const preset = presets[type];
+    if (!preset) {
+      throw new Error(`Unknown preset reminder type: ${type}`);
+    }
+    return this.createReminder(preset);
   }
 
   // Generate unique ID

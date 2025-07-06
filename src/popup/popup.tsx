@@ -101,7 +101,7 @@ const Popup: React.FC<PopupProps> = () => {
 
   const sendMessage = (type: string, data?: any): Promise<any> => {
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ type, data }, (response) => {
+      chrome.runtime.sendMessage({ type, ...data }, (response) => {
         if (response?.success) {
           resolve(response.data);
         } else {
@@ -293,12 +293,21 @@ const RemindersTab: React.FC<RemindersTabProps> = ({
   onToggle, 
   onDelete 
 }) => {
+  const validPresetTypes: ReminderType[] = ['pomodoro', 'posture', 'water', 'eye-rest'];
   const presetTypes: { type: ReminderType; label: string; description: string }[] = [
     { type: 'pomodoro', label: 'Pomodoro', description: '25min work / 5min break' },
     { type: 'posture', label: 'Posture Check', description: 'Hourly posture reminder' },
     { type: 'water', label: 'Water Break', description: 'Every 2 hours' },
     { type: 'eye-rest', label: 'Eye Rest', description: '20-20-20 rule' }
   ];
+
+  function handleCreatePreset(type: ReminderType) {
+    if (!validPresetTypes.includes(type)) {
+      console.warn('Invalid preset reminder type:', type);
+      return;
+    }
+    onCreatePreset(type);
+  }
 
   return (
     <div className="reminders-tab">
@@ -308,7 +317,7 @@ const RemindersTab: React.FC<RemindersTabProps> = ({
           {presetTypes.map(preset => (
             <button
               key={preset.type}
-              onClick={() => onCreatePreset(preset.type)}
+              onClick={() => handleCreatePreset(preset.type)}
               className="preset-button"
             >
               <strong>{preset.label}</strong>
@@ -327,25 +336,35 @@ const RemindersTab: React.FC<RemindersTabProps> = ({
             {reminders.map(reminder => (
               <div key={reminder.id} className="reminder-item">
                 <div className="reminder-info">
-                  <h4>{reminder.title}</h4>
-                  <p>{reminder.message}</p>
+                  <h4>{reminder.title || 'Untitled Reminder'}</h4>
+                  <p>{reminder.message && reminder.message.trim() ? reminder.message : <em>No message set</em>}</p>
                   <small>
                     {reminder.frequency} • {reminder.type}
                   </small>
                 </div>
                 <div className="reminder-actions">
-                  <button
-                    onClick={() => onToggle(reminder.id, !reminder.isActive)}
-                    className={reminder.isActive ? 'active' : 'inactive'}
-                  >
-                    {reminder.isActive ? 'Active' : 'Inactive'}
-                  </button>
-                  <button
-                    onClick={() => onDelete(reminder.id)}
-                    className="delete-button"
-                  >
-                    Delete
-                  </button>
+                  {reminder.id && (
+                    <>
+                      <button
+                        onClick={() => onToggle(reminder.id, !reminder.isActive)}
+                        className={reminder.isActive ? 'active' : 'inactive'}
+                      >
+                        {reminder.isActive ? 'Active' : 'Inactive'}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await onDelete(reminder.id);
+                          } catch (err) {
+                            console.error('Failed to delete reminder:', err);
+                          }
+                        }}
+                        className="delete-button"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
