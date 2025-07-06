@@ -156,50 +156,7 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
         sendResponse({ success: true });
         break;
 
-      case 'TEST_NAP':
-        const testNapPetState = await storageManager.getPetState();
-        if (testNapPetState) {
-          // Force the pet into nap animation for testing
-          testNapPetState.currentAnimation = 'nap';
-          testNapPetState.lastInteraction = Date.now() - 120000; // Set last interaction to 2 minutes ago
-          await storageManager.setPetState(testNapPetState);
-          
-          // Sync pet state to all tabs
-          const tabs = await chrome.tabs.query({});
-          tabs.forEach(tab => {
-            if (tab.id) {
-              chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' }).catch(() => {
-                // Ignore errors for tabs that don't have content script
-              });
-            }
-          });
-          
-          // Test nap animation triggered
-        }
-        sendResponse({ success: true });
-        break;
 
-      case 'TEST_SIT':
-        const testSitPetState = await storageManager.getPetState();
-        if (testSitPetState) {
-          // Force the pet into sit animation for testing
-          testSitPetState.currentAnimation = 'sit';
-          await storageManager.setPetState(testSitPetState);
-          
-          // Sync pet state to all tabs
-          const tabs = await chrome.tabs.query({});
-          tabs.forEach(tab => {
-            if (tab.id) {
-              chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' }).catch(() => {
-                // Ignore errors for tabs that don't have content script
-              });
-            }
-          });
-          
-          // Test sit animation triggered
-        }
-        sendResponse({ success: true });
-        break;
 
       case 'SYNC_STORAGE':
         await storageManager.syncAcrossTabs();

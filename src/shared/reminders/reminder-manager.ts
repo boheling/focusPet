@@ -212,12 +212,8 @@ export class ReminderManager {
       await this.showBrowserNotification(reminder);
     }
     
-    // Show system notification if enabled in settings
-    const settings = await storageManager.getUserSettings();
-    if (settings?.reminderDefaults?.systemNotifications) {
-      console.log('Showing system notification (works when Chrome is not focused)');
-      await this.showSystemNotification(reminder);
-    }
+    // Always show system notification (works when Chrome is not focused)
+    await this.showSystemNotification(reminder);
   }
 
   // Update next trigger time for recurring reminders
@@ -257,20 +253,7 @@ export class ReminderManager {
         iconUrl: 'assets/icons/icon48.png',
         title: 'focusPet Reminder',
         message: reminder.message,
-        priority: 2, // High priority
-        requireInteraction: true, // Don't auto-dismiss
-        silent: false, // Play sound
-        // Add buttons for better interaction
-        buttons: [
-          {
-            title: 'Dismiss',
-            iconUrl: 'assets/icons/icon16.png'
-          },
-          {
-            title: 'Snooze 5min',
-            iconUrl: 'assets/icons/icon16.png'
-          }
-        ]
+        priority: 1
       });
       console.log('Browser notification created for:', reminder.title);
     } catch (error) {
@@ -286,20 +269,7 @@ export class ReminderManager {
         iconUrl: 'assets/icons/icon48.png',
         title: 'focusPet Reminder',
         message: reminder.message,
-        priority: 2, // High priority
-        requireInteraction: true, // Don't auto-dismiss
-        silent: false, // Play sound
-        // These properties help with system-level notifications
-        buttons: [
-          {
-            title: 'Dismiss',
-            iconUrl: 'assets/icons/icon16.png'
-          },
-          {
-            title: 'Snooze 5min',
-            iconUrl: 'assets/icons/icon16.png'
-          }
-        ]
+        priority: 1
       });
       console.log('System notification created for:', reminder.title);
     } catch (error) {

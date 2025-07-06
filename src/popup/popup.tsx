@@ -247,7 +247,7 @@ interface PetTabProps {
   isExtension: boolean;
 }
 
-const PetTab: React.FC<PetTabProps> = ({ petState, onFeedPet, sendMessage, loadData, isExtension }) => {
+const PetTab: React.FC<PetTabProps> = ({ petState, onFeedPet }) => {
   return (
     <div className="pet-tab">
       <div className="pet-info">
@@ -300,54 +300,7 @@ const PetTab: React.FC<PetTabProps> = ({ petState, onFeedPet, sendMessage, loadD
           Feed Treat ({petState.treats} left)
         </button>
         
-        {isExtension && (
-          <>
-            <button 
-              onClick={async () => {
-                try {
-                  await sendMessage('ADD_TREATS', { count: 1 });
-                  await loadData(); // Reload data
-                } catch (error) {
-                  console.error('Error adding treat:', error);
-                }
-              }}
-              className="add-treat-button"
-              style={{ marginTop: '8px' }}
-            >
-              Add Test Treat
-            </button>
-            
-            <button 
-              onClick={async () => {
-                try {
-                  await sendMessage('TEST_NAP');
-                  await loadData(); // Reload data
-                } catch (error) {
-                  console.error('Error testing nap:', error);
-                }
-              }}
-              className="test-nap-button"
-              style={{ marginTop: '8px', backgroundColor: '#4a90e2' }}
-            >
-              Test Nap Animation
-            </button>
-            
-            <button 
-              onClick={async () => {
-                try {
-                  await sendMessage('TEST_SIT');
-                  await loadData(); // Reload data
-                } catch (error) {
-                  console.error('Error testing sit:', error);
-                }
-              }}
-              className="test-sit-button"
-              style={{ marginTop: '8px', backgroundColor: '#8e44ad' }}
-            >
-              Test Sit Animation
-            </button>
-          </>
-        )}
+
       </div>
 
       <div className="pet-animations">
