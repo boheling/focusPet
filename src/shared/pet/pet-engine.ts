@@ -165,9 +165,8 @@ export class PetEngine {
       this.petState.happiness = Math.max(0, this.petState.happiness - 2);
     }
 
-    // Sit after 1 minute of inactivity, nap after 2 minutes
+    // Nap after 2 minutes of inactivity
     if (timeSinceInteraction > 120000) { // 2 minutes
-      // Only nap if not already napping
       if (this.petState.currentAnimation !== 'nap') {
         this.setAnimation('nap');
       }
@@ -175,20 +174,11 @@ export class PetEngine {
       const idleMinutes = Math.floor(timeSinceInteraction / 60000);
       const energyGain = Math.min(3, idleMinutes); // Max 3 energy per 30-second cycle
       this.petState.energy = Math.min(100, this.petState.energy + energyGain);
-    } else if (timeSinceInteraction > 60000) { // 1-2 minutes
-      // Only sit if not already sitting or napping
-      if (this.petState.currentAnimation !== 'sit' && this.petState.currentAnimation !== 'nap') {
-        this.setAnimation('sit');
-      }
-      // Energy restoration while sitting
-      const idleMinutes = Math.floor(timeSinceInteraction / 60000);
-      const energyGain = Math.min(2, idleMinutes); // Slightly less than nap
-      this.petState.energy = Math.min(100, this.petState.energy + energyGain);
     } else {
       // Decrease energy if recently interacted with (pet is active)
       this.petState.energy = Math.max(0, this.petState.energy - 1);
-      // Return to idle if was sitting or napping but now active
-      if (this.petState.currentAnimation === 'nap' || this.petState.currentAnimation === 'sit') {
+      // Return to idle if was napping but now active
+      if (this.petState.currentAnimation === 'nap') {
         this.setAnimation('idle');
       }
     }
@@ -199,8 +189,8 @@ export class PetEngine {
     // Update mood based on stats
     this.updateMood();
 
-    // Random behaviors (less likely when napping or sitting, and never override nap/sit)
-    if (Math.random() < 0.3 && this.petState.currentAnimation !== 'nap' && this.petState.currentAnimation !== 'sit') {
+    // Random behaviors (sit/play) if not napping
+    if (Math.random() < 0.3 && this.petState.currentAnimation !== 'nap') {
       this.performRandomBehavior();
     }
 

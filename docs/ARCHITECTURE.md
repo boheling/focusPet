@@ -279,10 +279,10 @@ class PetEngine {
 }
 ```
 
-### Pet Idle, Sit, and Nap Logic
+### Pet Idle and Nap Logic
 - The pet engine tracks the time since last user interaction.
-- After 1 minute of inactivity, the pet switches to the 'sit' animation (if not already napping).
 - After 2 minutes of inactivity, the pet switches to the 'nap' animation.
+- The 'sit' animation is now only triggered as a random behavior, not by inactivity.
 - Any user interaction (mouse move/click) wakes the pet up and returns it to idle.
 - For best results, sit and nap images should be transparent PNGs.
 - This logic is implemented in the `updatePetBehavior` method of the pet engine.

@@ -127,10 +127,10 @@ focusPet/
 - **Active Energy Loss**: Energy decreases when pet is active (recently interacted with)
 - **Realistic Behavior**: Treats provide happiness and reduce hunger, but energy comes from rest
 
-## 💤 Idle, Sit, and Nap Behavior
+## 💤 Idle and Nap Behavior
 
 - **Idle**: Pet is active or waiting for interaction.
-- **Sit**: After 1 minute of no interaction, the pet automatically sits (shows the sit animation).
+- **Sit**: The pet may randomly sit as part of its behaviors (not tied to inactivity).
 - **Nap**: After 2 minutes of no interaction, the pet automatically naps (shows the nap animation).
 - **Return to Idle**: Any interaction (mouse move/click) wakes the pet up and returns it to idle.
 - **Image Requirements**: For best results, use transparent PNGs for sit and nap animations.
