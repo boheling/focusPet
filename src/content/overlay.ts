@@ -59,6 +59,9 @@ class PetOverlay {
   private async loadPetState(): Promise<void> {
     this.petState = await storageManager.getPetState();
     if (this.petState) {
+      // Update last interaction when overlay is initialized on a new page
+      // This prevents the pet from immediately napping when navigating
+      this.petState.lastInteraction = Date.now();
       this.petEngine = new PetEngine(this.petState);
     }
   }
@@ -75,7 +78,7 @@ class PetOverlay {
         
         // Add error handling and logging
         img.onload = () => {
-          console.log(`focusPet: Loaded sprite ${spriteKey}, dimensions: ${img.naturalWidth}x${img.naturalHeight}`);
+          // Silent loading - remove verbose logging
         };
         img.onerror = () => {
           console.error(`focusPet: Failed to load sprite ${spriteKey}`);
@@ -132,8 +135,6 @@ class PetOverlay {
   private resizeCanvas(): void {
     const newWidth = window.innerWidth;
     const newHeight = window.innerHeight;
-    
-    console.log('focusPet: Resizing canvas to', newWidth, 'x', newHeight);
     
     this.canvas.width = newWidth;
     this.canvas.height = newHeight;
@@ -380,8 +381,6 @@ class PetOverlay {
   }
 
   private async handleReminder(reminder: any): Promise<void> {
-    console.log('focusPet: Reminder triggered:', reminder.title, reminder.message);
-    
     // Show a prominent speech bubble
     this.showSpeechBubble(`⏰ ${reminder.title}: ${reminder.message}`);
     
@@ -539,6 +538,8 @@ class PetOverlay {
   public async reloadPetState(): Promise<void> {
     await this.loadPetState();
     if (this.petEngine && this.petState) {
+      // Update last interaction when reloading pet state
+      this.petState.lastInteraction = Date.now();
       this.petEngine = new PetEngine(this.petState);
     }
   }
@@ -557,23 +558,18 @@ class PetOverlay {
 }
 
 // Initialize the overlay when the content script loads
-console.log('focusPet: Content script loading...');
-
 const overlay = new PetOverlay();
 (window as any).focusPetOverlay = overlay;
 
 // MutationObserver to re-inject overlay if removed
 const observer = new MutationObserver(() => {
   if (!document.getElementById('focuspet-overlay')) {
-    console.log('focusPet: Overlay missing, re-injecting...');
     (window as any).focusPetOverlay = new PetOverlay();
   }
 });
 observer.observe(document.body, { childList: true, subtree: true });
 
-console.log('focusPet: Content script loaded successfully');
-
 // Export onExecute function for @crxjs/vite-plugin
-export function onExecute(context: any) {
-  console.log('focusPet: Content script executed with context:', context);
+export function onExecute(_context: any) {
+  // Silent execution
 } 

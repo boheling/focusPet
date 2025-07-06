@@ -8,7 +8,6 @@ export class PetEngine {
   private mousePosition: Position = { x: 0, y: 0 };
 
   constructor(initialPetState: PetState) {
-    console.log('focusPet: Creating PetEngine with state:', initialPetState);
     this.petState = initialPetState;
     this.startBehaviorLoop();
   }
@@ -24,7 +23,6 @@ export class PetEngine {
     try {
       await storageManager.setPetState(this.petState);
     } catch (error) {
-      console.log('Pet state update failed (extension context may be invalidated):', error);
       // Continue with local state update even if storage fails
     }
     this.updateMood();
@@ -32,13 +30,9 @@ export class PetEngine {
 
   // Animation management
   setAnimation(animation: PetAnimation): void {
-    console.log(`focusPet: setAnimation called with '${animation}', unlocked: ${this.petState.unlockedAnimations.includes(animation)}`);
     if (this.petState.unlockedAnimations.includes(animation)) {
-      console.log(`focusPet: Setting animation to '${animation}'`);
       this.petState.currentAnimation = animation;
       this.updatePetState({ currentAnimation: animation });
-    } else {
-      console.log(`focusPet: Animation '${animation}' not unlocked. Available: ${this.petState.unlockedAnimations.join(', ')}`);
     }
   }
 
@@ -96,7 +90,7 @@ export class PetEngine {
         lastInteraction: this.petState.lastInteraction
       });
     } catch (error) {
-      console.log('Pet interaction failed to save to storage:', error);
+      // Silent error handling
     }
 
     // Reset to idle after interaction
@@ -119,7 +113,7 @@ export class PetEngine {
           hunger: this.petState.hunger
         });
       } catch (error) {
-        console.log('Pet feeding failed to save to storage:', error);
+        // Silent error handling
       }
 
       setTimeout(() => {
@@ -133,7 +127,7 @@ export class PetEngine {
     try {
       await this.updatePetState({ treats: this.petState.treats });
     } catch (error) {
-      console.log('Adding treats failed to save to storage:', error);
+      // Silent error handling
     }
   }
 
@@ -158,7 +152,6 @@ export class PetEngine {
 
   // Behavior loop
   private startBehaviorLoop(): void {
-    console.log('focusPet: Starting behavior loop (runs every 30 seconds)');
     this.behaviorTimer = window.setInterval(() => {
       this.updatePetBehavior();
     }, 30000); // Update every 30 seconds
@@ -167,7 +160,6 @@ export class PetEngine {
   private async updatePetBehavior(): Promise<void> {
     const now = Date.now();
     const timeSinceInteraction = now - this.petState.lastInteraction;
-    console.log(`focusPet: Behavior update - inactive for ${Math.floor(timeSinceInteraction / 1000)}s, current animation: ${this.petState.currentAnimation}`);
 
     // Decrease happiness over time if not interacted with
     if (timeSinceInteraction > 300000) { // 5 minutes
@@ -176,9 +168,7 @@ export class PetEngine {
 
     // Nap after 2 minutes of inactivity
     if (timeSinceInteraction > 120000) { // 2 minutes
-      console.log(`focusPet: Pet inactive for ${Math.floor(timeSinceInteraction / 1000)}s, should nap`);
       if (this.petState.currentAnimation !== 'nap') {
-        console.log('focusPet: Setting pet to nap animation');
         this.setAnimation('nap');
       }
       // Energy restoration while napping
@@ -195,7 +185,6 @@ export class PetEngine {
       }
       // Random behaviors (sit/play) if not napping
       if (Math.random() < 0.3 && this.petState.currentAnimation !== 'nap') {
-        console.log('focusPet: Performing random behavior');
         this.performRandomBehavior();
       }
     }
@@ -214,7 +203,7 @@ export class PetEngine {
         mood: this.petState.mood
       });
     } catch (error) {
-      console.log('Pet behavior update failed to save to storage:', error);
+      // Silent error handling
     }
   }
 

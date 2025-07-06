@@ -16,20 +16,20 @@ chrome.runtime.onInstalled.addListener(async () => {
       permissions: ['notifications']
     });
     if (permission) {
-      console.log('Notification permission granted');
+      // Notification permission granted
     } else {
-      console.log('Notification permission denied - reminders will only show in browser');
+      // Notification permission denied - reminders will only show in browser
     }
   } catch (error) {
-    console.log('Notification permission already granted or not available');
+    // Notification permission already granted or not available
   }
 });
 
 // Handle alarm triggers
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  console.log('Alarm triggered:', alarm.name, alarm.scheduledTime);
+  // Alarm triggered
   if (alarm.name.startsWith('reminder_')) {
-    console.log('Processing reminder alarm:', alarm.name);
+    // Processing reminder alarm
     await reminderManager.handleAlarmTrigger(alarm.name);
   }
 });
@@ -55,18 +55,17 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
 
       case 'GET_USER_SETTINGS':
         const settings = await storageManager.getUserSettings();
-        console.log('Background: Retrieved settings:', settings);
+        // Retrieved settings
         sendResponse({ success: true, data: settings });
         break;
 
       case 'UPDATE_USER_SETTINGS':
-        console.log('Background: Saving settings:', message.data);
         await storageManager.setUserSettings(message.data);
-        console.log('Background: Settings saved successfully');
+        // Settings saved successfully
         
-        // Verify the save by reading back
-        const savedSettings = await storageManager.getUserSettings();
-        console.log('Background: Verified saved settings:', savedSettings);
+                  // Verify the save by reading back
+          await storageManager.getUserSettings();
+          // Verified saved settings
         
         sendResponse({ success: true });
         break;
@@ -92,7 +91,7 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
         break;
 
       case 'CREATE_PRESET_REMINDER':
-        console.log('CREATE_PRESET_REMINDER called with:', message.reminderType);
+        // Creating preset reminder
         const presetReminder = await reminderManager.createPresetReminder(message.reminderType);
         sendResponse({ success: true, data: presetReminder });
         break;
@@ -175,7 +174,7 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
             }
           });
           
-          console.log('Test nap animation triggered');
+          // Test nap animation triggered
         }
         sendResponse({ success: true });
         break;
@@ -197,7 +196,7 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
             }
           });
           
-          console.log('Test sit animation triggered');
+          // Test sit animation triggered
         }
         sendResponse({ success: true });
         break;
@@ -217,7 +216,7 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
             isActive: true
           };
           await reminderManager.createReminder(snoozedReminder);
-          console.log(`Reminder snoozed for ${message.snoozeMinutes} minutes`);
+          // Reminder snoozed
         }
         sendResponse({ success: true });
         break;
@@ -239,18 +238,18 @@ chrome.notifications.onClicked.addListener((_notificationId) => {
 
 // Handle notification button clicks
 chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
-  console.log('Notification button clicked:', notificationId, 'button:', buttonIndex);
+      // Notification button clicked
   
   if (notificationId.startsWith('notification_') || notificationId.startsWith('system_notification_')) {
     const reminderId = notificationId.replace('notification_', '').replace('system_notification_', '');
     
     if (buttonIndex === 0) {
       // Dismiss button
-      console.log('Dismissing reminder:', reminderId);
+      // Dismissing reminder
       await chrome.notifications.clear(notificationId);
     } else if (buttonIndex === 1) {
       // Snooze 5 minutes
-      console.log('Snoozing reminder:', reminderId, 'for 5 minutes');
+      // Snoozing reminder
       await chrome.notifications.clear(notificationId);
       
       // Create a new reminder for 5 minutes from now
@@ -263,7 +262,7 @@ chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIn
           isActive: true
         };
         await reminderManager.createReminder(snoozedReminder);
-        console.log('Reminder snoozed for 5 minutes');
+        // Reminder snoozed for 5 minutes
       }
     }
   }
@@ -322,7 +321,7 @@ async function trackFocusTime(): Promise<void> {
 
             // Sync pet state to all tabs (including popup)
             const tabs = await chrome.tabs.query({});
-            console.log(`Background: Sending SYNC_PET_STATE to ${tabs.length} tabs`);
+            // Sending SYNC_PET_STATE to tabs
             tabs.forEach(tab => {
               if (tab.id) {
                 chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' }).catch(() => {
@@ -340,7 +339,7 @@ async function trackFocusTime(): Promise<void> {
               priority: 1
             });
 
-            console.log(`Treat earned! Total focus time: ${focusStats.totalFocusTime} minutes`);
+            // Treat earned
             focusStats.lastTreatTime = now;
           }
         }
