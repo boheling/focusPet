@@ -54,6 +54,7 @@ export interface UserSettings {
   reminderDefaults: {
     soundEnabled: boolean;
     visualEnabled: boolean;
+    systemNotifications: boolean; // Show notifications even when Chrome is not focused
   };
   focusTracking: {
     enabled: boolean;

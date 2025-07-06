@@ -28,7 +28,7 @@ const mockSettings: UserSettings = {
   soundEnabled: true,
   visualEffectsEnabled: true,
   petPosition: 'bottom-right',
-  reminderDefaults: { soundEnabled: true, visualEnabled: true },
+  reminderDefaults: { soundEnabled: true, visualEnabled: true, systemNotifications: true },
   focusTracking: { enabled: true, trackingInterval: 30, treatRewardInterval: 30 },
   theme: 'auto',
 };

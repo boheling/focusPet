@@ -93,9 +93,19 @@ class PetOverlay {
     });
 
     // Listen for reminder messages from background script
-    chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.type === 'REMINDER_TRIGGERED') {
         this.handleReminder(message.reminder);
+        sendResponse({ success: true });
+      } else if (message.type === 'SYNC_PET_STATE') {
+        // Reload pet state when popup makes changes
+        this.reloadPetState().then(() => {
+          sendResponse({ success: true });
+        }).catch((error) => {
+          console.error('Error reloading pet state:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+        return true; // Keep message channel open for async response
       }
     });
 
@@ -396,22 +406,37 @@ class PetOverlay {
         <h3 style="margin: 0; font-size: 16px; font-weight: 600;">${reminder.title}</h3>
       </div>
       <p style="margin: 0; font-size: 14px; line-height: 1.4; opacity: 0.9;">${reminder.message}</p>
-      <button id="focuspet-dismiss" style="
+      <div style="
         position: absolute;
         top: 8px;
         right: 8px;
-        background: rgba(255,255,255,0.2);
-        border: none;
-        color: white;
-        border-radius: 50%;
-        width: 24px;
-        height: 24px;
-        cursor: pointer;
-        font-size: 12px;
         display: flex;
-        align-items: center;
-        justify-content: center;
-      ">×</button>
+        gap: 8px;
+      ">
+        <button id="focuspet-snooze" style="
+          background: rgba(255,255,255,0.2);
+          border: none;
+          color: white;
+          border-radius: 4px;
+          padding: 4px 8px;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 500;
+        ">Snooze 5m</button>
+        <button id="focuspet-dismiss" style="
+          background: rgba(255,255,255,0.2);
+          border: none;
+          color: white;
+          border-radius: 50%;
+          width: 24px;
+          height: 24px;
+          cursor: pointer;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">×</button>
+      </div>
     `;
     
     // Add CSS animation
@@ -433,7 +458,7 @@ class PetOverlay {
     
     document.body.appendChild(notification);
     
-    // Auto-dismiss after 10 seconds
+    // Auto-dismiss after 30 seconds (longer for important reminders)
     setTimeout(() => {
       if (notification.parentNode) {
         notification.style.animation = 'slideIn 0.5s ease-out reverse';
@@ -443,7 +468,7 @@ class PetOverlay {
           }
         }, 500);
       }
-    }, 10000);
+    }, 30000); // 30 seconds instead of 10
     
     // Manual dismiss button
     const dismissBtn = notification.querySelector('#focuspet-dismiss');
@@ -451,6 +476,27 @@ class PetOverlay {
       dismissBtn.addEventListener('click', () => {
         if (notification.parentNode) {
           notification.parentNode.removeChild(notification);
+        }
+      });
+    }
+
+    // Snooze button
+    const snoozeBtn = notification.querySelector('#focuspet-snooze');
+    if (snoozeBtn) {
+      snoozeBtn.addEventListener('click', async () => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+        
+        // Send message to background script to snooze the reminder
+        try {
+          await chrome.runtime.sendMessage({
+            type: 'SNOOZE_REMINDER',
+            reminderId: reminder.id,
+            snoozeMinutes: 5
+          });
+        } catch (error) {
+          console.error('Error snoozing reminder:', error);
         }
       });
     }
@@ -472,6 +518,14 @@ class PetOverlay {
   public addTreats(count: number): void {
     if (this.petEngine) {
       this.petEngine.addTreats(count);
+    }
+  }
+
+  // Reload pet state from storage (for sync with popup)
+  public async reloadPetState(): Promise<void> {
+    await this.loadPetState();
+    if (this.petEngine && this.petState) {
+      this.petEngine = new PetEngine(this.petState);
     }
   }
 

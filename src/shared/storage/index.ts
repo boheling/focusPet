@@ -171,6 +171,7 @@ export class StorageManager {
         reminderDefaults: {
           soundEnabled: true,
           visualEnabled: true,
+          systemNotifications: true, // Enable system notifications by default
         },
         focusTracking: {
           enabled: true,

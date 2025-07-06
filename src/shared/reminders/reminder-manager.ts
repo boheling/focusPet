@@ -211,6 +211,13 @@ export class ReminderManager {
       console.log('Showing browser notification');
       await this.showBrowserNotification(reminder);
     }
+    
+    // Show system notification if enabled in settings
+    const settings = await storageManager.getUserSettings();
+    if (settings?.reminderDefaults?.systemNotifications) {
+      console.log('Showing system notification (works when Chrome is not focused)');
+      await this.showSystemNotification(reminder);
+    }
   }
 
   // Update next trigger time for recurring reminders
@@ -252,10 +259,51 @@ export class ReminderManager {
         message: reminder.message,
         priority: 2, // High priority
         requireInteraction: true, // Don't auto-dismiss
-        silent: false // Play sound
+        silent: false, // Play sound
+        // Add buttons for better interaction
+        buttons: [
+          {
+            title: 'Dismiss',
+            iconUrl: 'assets/icons/icon16.png'
+          },
+          {
+            title: 'Snooze 5min',
+            iconUrl: 'assets/icons/icon16.png'
+          }
+        ]
       });
+      console.log('Browser notification created for:', reminder.title);
     } catch (error) {
       console.error('Error showing browser notification:', error);
+    }
+  }
+
+  // Show system notification (works even when Chrome is not focused)
+  private async showSystemNotification(reminder: Reminder): Promise<void> {
+    try {
+      await chrome.notifications.create(`system_notification_${reminder.id}`, {
+        type: 'basic',
+        iconUrl: 'assets/icons/icon48.png',
+        title: 'focusPet Reminder',
+        message: reminder.message,
+        priority: 2, // High priority
+        requireInteraction: true, // Don't auto-dismiss
+        silent: false, // Play sound
+        // These properties help with system-level notifications
+        buttons: [
+          {
+            title: 'Dismiss',
+            iconUrl: 'assets/icons/icon16.png'
+          },
+          {
+            title: 'Snooze 5min',
+            iconUrl: 'assets/icons/icon16.png'
+          }
+        ]
+      });
+      console.log('System notification created for:', reminder.title);
+    } catch (error) {
+      console.error('Error showing system notification:', error);
     }
   }
 

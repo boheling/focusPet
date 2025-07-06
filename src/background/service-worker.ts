@@ -8,6 +8,21 @@ chrome.runtime.onStartup.addListener(async () => {
 
 chrome.runtime.onInstalled.addListener(async () => {
   await storageManager.initializeDefaults();
+  
+  // Request notification permission for system-level notifications
+  try {
+    // This will prompt the user for notification permission if not already granted
+    const permission = await chrome.permissions.request({
+      permissions: ['notifications']
+    });
+    if (permission) {
+      console.log('Notification permission granted');
+    } else {
+      console.log('Notification permission denied - reminders will only show in browser');
+    }
+  } catch (error) {
+    console.log('Notification permission already granted or not available');
+  }
 });
 
 // Handle alarm triggers
@@ -99,6 +114,16 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
         if (currentPetState) {
           currentPetState.treats += message.count;
           await storageManager.setPetState(currentPetState);
+          
+          // Sync pet state to all tabs
+          const tabs = await chrome.tabs.query({});
+          tabs.forEach(tab => {
+            if (tab.id) {
+              chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' }).catch(() => {
+                // Ignore errors for tabs that don't have content script
+              });
+            }
+          });
         }
         sendResponse({ success: true });
         break;
@@ -110,12 +135,37 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
           feedingPetState.happiness = Math.min(100, feedingPetState.happiness + 15);
           feedingPetState.hunger = Math.max(0, feedingPetState.hunger - 20);
           await storageManager.setPetState(feedingPetState);
+          
+          // Sync pet state to all tabs
+          const tabs = await chrome.tabs.query({});
+          tabs.forEach(tab => {
+            if (tab.id) {
+              chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' }).catch(() => {
+                // Ignore errors for tabs that don't have content script
+              });
+            }
+          });
         }
         sendResponse({ success: true });
         break;
 
       case 'SYNC_STORAGE':
         await storageManager.syncAcrossTabs();
+        sendResponse({ success: true });
+        break;
+
+      case 'SNOOZE_REMINDER':
+        const reminder = reminderManager.getReminders().find(r => r.id === message.reminderId);
+        if (reminder) {
+          const snoozedReminder = {
+            ...reminder,
+            id: reminder.id + '_snoozed_' + Date.now(),
+            nextTrigger: Date.now() + (message.snoozeMinutes * 60 * 1000),
+            isActive: true
+          };
+          await reminderManager.createReminder(snoozedReminder);
+          console.log(`Reminder snoozed for ${message.snoozeMinutes} minutes`);
+        }
         sendResponse({ success: true });
         break;
 
@@ -132,6 +182,38 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
 chrome.notifications.onClicked.addListener((_notificationId) => {
   // Handle notification click - could open popup or specific page
   chrome.action.openPopup();
+});
+
+// Handle notification button clicks
+chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
+  console.log('Notification button clicked:', notificationId, 'button:', buttonIndex);
+  
+  if (notificationId.startsWith('notification_') || notificationId.startsWith('system_notification_')) {
+    const reminderId = notificationId.replace('notification_', '').replace('system_notification_', '');
+    
+    if (buttonIndex === 0) {
+      // Dismiss button
+      console.log('Dismissing reminder:', reminderId);
+      await chrome.notifications.clear(notificationId);
+    } else if (buttonIndex === 1) {
+      // Snooze 5 minutes
+      console.log('Snoozing reminder:', reminderId, 'for 5 minutes');
+      await chrome.notifications.clear(notificationId);
+      
+      // Create a new reminder for 5 minutes from now
+      const reminder = reminderManager.getReminders().find(r => r.id === reminderId);
+      if (reminder) {
+        const snoozedReminder = {
+          ...reminder,
+          id: reminderId + '_snoozed',
+          nextTrigger: Date.now() + (5 * 60 * 1000), // 5 minutes
+          isActive: true
+        };
+        await reminderManager.createReminder(snoozedReminder);
+        console.log('Reminder snoozed for 5 minutes');
+      }
+    }
+  }
 });
 
 // Handle tab updates to sync pet state
