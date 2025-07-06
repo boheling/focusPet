@@ -293,12 +293,13 @@ const RemindersTab: React.FC<RemindersTabProps> = ({
   onToggle, 
   onDelete 
 }) => {
-  const validPresetTypes: ReminderType[] = ['pomodoro', 'posture', 'water', 'eye-rest'];
+  const validPresetTypes: ReminderType[] = ['pomodoro', 'posture', 'water', 'eye-rest', 'test'];
   const presetTypes: { type: ReminderType; label: string; description: string }[] = [
     { type: 'pomodoro', label: 'Pomodoro', description: '25min work / 5min break' },
     { type: 'posture', label: 'Posture Check', description: 'Hourly posture reminder' },
     { type: 'water', label: 'Water Break', description: 'Every 2 hours' },
-    { type: 'eye-rest', label: 'Eye Rest', description: '20-20-20 rule' }
+    { type: 'eye-rest', label: 'Eye Rest', description: '20-20-20 rule' },
+    { type: 'test', label: 'Test (10s)', description: 'Test reminder - triggers in 10 seconds' }
   ];
 
   function handleCreatePreset(type: ReminderType) {

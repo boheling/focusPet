@@ -272,9 +272,10 @@ class PetOverlay {
       bubbleY - padding - 5
     );
 
-    // Auto-hide speech bubble
+    // Auto-hide speech bubble (longer for reminders)
     this.speechBubble.timer++;
-    if (this.speechBubble.timer > 120) { // 2 seconds at 60fps
+    const maxTimer = this.speechBubble.message.includes('⏰') ? 300 : 120; // 5 seconds for reminders, 2 for others
+    if (this.speechBubble.timer > maxTimer) {
       this.speechBubble.show = false;
       this.speechBubble.timer = 0;
     }
@@ -355,8 +356,103 @@ class PetOverlay {
   }
 
   private async handleReminder(reminder: any): Promise<void> {
+    console.log('focusPet: Reminder triggered:', reminder.title, reminder.message);
+    
+    // Show a prominent speech bubble
+    this.showSpeechBubble(`⏰ ${reminder.title}: ${reminder.message}`);
+    
+    // Make the pet react
     if (this.petEngine) {
       await this.petEngine.reactToReminder(reminder.message);
+    }
+    
+    // Show a more prominent overlay notification
+    this.showOverlayNotification(reminder);
+  }
+
+  private showOverlayNotification(reminder: any): void {
+    // Create a prominent notification overlay
+    const notification = document.createElement('div');
+    notification.id = 'focuspet-notification';
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      z-index: 2147483648;
+      max-width: 300px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      animation: slideIn 0.5s ease-out;
+      border: 2px solid rgba(255,255,255,0.2);
+    `;
+    
+    notification.innerHTML = `
+      <div style="display: flex; align-items: center; margin-bottom: 10px;">
+        <span style="font-size: 24px; margin-right: 10px;">⏰</span>
+        <h3 style="margin: 0; font-size: 16px; font-weight: 600;">${reminder.title}</h3>
+      </div>
+      <p style="margin: 0; font-size: 14px; line-height: 1.4; opacity: 0.9;">${reminder.message}</p>
+      <button id="focuspet-dismiss" style="
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">×</button>
+    `;
+    
+    // Add CSS animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+      }
+      #focuspet-notification {
+        animation: slideIn 0.5s ease-out, pulse 2s ease-in-out infinite;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(notification);
+    
+    // Auto-dismiss after 10 seconds
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.style.animation = 'slideIn 0.5s ease-out reverse';
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+          }
+        }, 500);
+      }
+    }, 10000);
+    
+    // Manual dismiss button
+    const dismissBtn = notification.querySelector('#focuspet-dismiss');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', () => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      });
     }
   }
 

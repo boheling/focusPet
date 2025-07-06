@@ -99,12 +99,22 @@ export class ReminderManager {
     const alarmId = `reminder_${reminder.id}`;
     const delayInMinutes = this.calculateDelayInMinutes(reminder);
 
+    console.log(`Scheduling reminder ${reminder.id}:`, {
+      alarmId,
+      delayInMinutes,
+      reminder: reminder.title,
+      nextTrigger: new Date(reminder.nextTrigger).toLocaleString()
+    });
+
     if (delayInMinutes > 0) {
       await chrome.alarms.create(alarmId, {
         delayInMinutes,
         periodInMinutes: this.getPeriodInMinutes(reminder.frequency, reminder.interval)
       });
       this.alarmIds.add(alarmId);
+      console.log(`Alarm created: ${alarmId} in ${delayInMinutes} minutes`);
+    } else {
+      console.log(`Reminder ${reminder.id} has no delay, not scheduling alarm`);
     }
   }
 
@@ -176,8 +186,11 @@ export class ReminderManager {
 
   // Trigger a reminder
   private async triggerReminder(reminder: Reminder): Promise<void> {
+    console.log(`Triggering reminder: ${reminder.title} - ${reminder.message}`);
+    
     // Send message to content script to show notification
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    console.log(`Found ${tabs.length} active tabs`);
     
     for (const tab of tabs) {
       if (tab.id) {
@@ -186,6 +199,7 @@ export class ReminderManager {
             type: 'REMINDER_TRIGGERED',
             reminder
           });
+          console.log(`Sent reminder to tab ${tab.id}`);
         } catch (error) {
           console.error(`Error sending reminder to tab ${tab.id}:`, error);
         }
@@ -194,6 +208,7 @@ export class ReminderManager {
 
     // Show browser notification if enabled
     if (reminder.soundEnabled || reminder.visualEnabled) {
+      console.log('Showing browser notification');
       await this.showBrowserNotification(reminder);
     }
   }
@@ -235,7 +250,9 @@ export class ReminderManager {
         iconUrl: 'assets/icons/icon48.png',
         title: 'focusPet Reminder',
         message: reminder.message,
-        priority: 1
+        priority: 2, // High priority
+        requireInteraction: true, // Don't auto-dismiss
+        silent: false // Play sound
       });
     } catch (error) {
       console.error('Error showing browser notification:', error);
@@ -288,12 +305,23 @@ export class ReminderManager {
         soundEnabled: true,
         visualEnabled: true
       },
+
       custom: {
         title: 'Custom Reminder',
         message: 'Custom reminder message',
         type: 'custom' as ReminderType,
         frequency: 'once' as ReminderFrequency,
         nextTrigger: Date.now() + (60 * 60 * 1000),
+        isActive: true,
+        soundEnabled: true,
+        visualEnabled: true
+      },
+      test: {
+        title: 'Test Reminder',
+        message: 'This is a test reminder that triggers in 10 seconds!',
+        type: 'test' as ReminderType,
+        frequency: 'once' as ReminderFrequency,
+        nextTrigger: Date.now() + 10 * 1000, // 10 seconds
         isActive: true,
         soundEnabled: true,
         visualEnabled: true

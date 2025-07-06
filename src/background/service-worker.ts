@@ -12,7 +12,9 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 // Handle alarm triggers
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  console.log('Alarm triggered:', alarm.name, alarm.scheduledTime);
   if (alarm.name.startsWith('reminder_')) {
+    console.log('Processing reminder alarm:', alarm.name);
     await reminderManager.handleAlarmTrigger(alarm.name);
   }
 });

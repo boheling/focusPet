@@ -26,7 +26,7 @@ export interface Position {
 }
 
 // Reminder System
-export type ReminderType = 'pomodoro' | 'posture' | 'water' | 'eye-rest' | 'custom';
+export type ReminderType = 'pomodoro' | 'posture' | 'water' | 'eye-rest' | 'custom' | 'test';
 
 export type ReminderFrequency = 'once' | 'daily' | 'weekly' | 'hourly' | 'custom';
 
