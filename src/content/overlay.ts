@@ -72,6 +72,15 @@ class PetOverlay {
         const spriteKey = `${petType}_${animation}`;
         const img = new Image();
         img.src = chrome.runtime.getURL(`assets/pets/${petType}/${animation}.png`);
+        
+        // Add error handling and logging
+        img.onload = () => {
+          console.log(`focusPet: Loaded sprite ${spriteKey}, dimensions: ${img.naturalWidth}x${img.naturalHeight}`);
+        };
+        img.onerror = () => {
+          console.error(`focusPet: Failed to load sprite ${spriteKey}`);
+        };
+        
         this.sprites.set(spriteKey, img);
       }
     }
@@ -166,16 +175,21 @@ class PetOverlay {
     const sprite = this.sprites.get(spriteKey);
 
     if (sprite && sprite.complete && sprite.naturalWidth > 0) {
-      // Use sprite if available
-      const size = 64; // Pet size
-      const x = this.petState.position.x - size / 2;
-      const y = this.petState.position.y - size / 2;
+      // Calculate dimensions based on original aspect ratio
+      const baseSize = 64; // Base size for width
+      const aspectRatio = sprite.naturalHeight / sprite.naturalWidth;
+      const width = baseSize;
+      const height = baseSize * aspectRatio;
+      
+      const x = this.petState.position.x - width / 2;
+      const y = this.petState.position.y - height / 2;
 
       // Apply mood-based color adjustments
       this.ctx.save();
       this.applyMoodEffects();
 
-      this.ctx.drawImage(sprite, x, y, size, size);
+      // Draw the image with transparency support
+      this.ctx.drawImage(sprite, x, y, width, height);
       this.ctx.restore();
     } else {
       // Fallback: draw a simple colored circle

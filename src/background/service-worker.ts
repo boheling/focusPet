@@ -55,11 +55,19 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
 
       case 'GET_USER_SETTINGS':
         const settings = await storageManager.getUserSettings();
+        console.log('Background: Retrieved settings:', settings);
         sendResponse({ success: true, data: settings });
         break;
 
       case 'UPDATE_USER_SETTINGS':
+        console.log('Background: Saving settings:', message.data);
         await storageManager.setUserSettings(message.data);
+        console.log('Background: Settings saved successfully');
+        
+        // Verify the save by reading back
+        const savedSettings = await storageManager.getUserSettings();
+        console.log('Background: Verified saved settings:', savedSettings);
+        
         sendResponse({ success: true });
         break;
 
@@ -145,6 +153,51 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
               });
             }
           });
+        }
+        sendResponse({ success: true });
+        break;
+
+      case 'TEST_NAP':
+        const testNapPetState = await storageManager.getPetState();
+        if (testNapPetState) {
+          // Force the pet into nap animation for testing
+          testNapPetState.currentAnimation = 'nap';
+          testNapPetState.lastInteraction = Date.now() - 120000; // Set last interaction to 2 minutes ago
+          await storageManager.setPetState(testNapPetState);
+          
+          // Sync pet state to all tabs
+          const tabs = await chrome.tabs.query({});
+          tabs.forEach(tab => {
+            if (tab.id) {
+              chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' }).catch(() => {
+                // Ignore errors for tabs that don't have content script
+              });
+            }
+          });
+          
+          console.log('Test nap animation triggered');
+        }
+        sendResponse({ success: true });
+        break;
+
+      case 'TEST_SIT':
+        const testSitPetState = await storageManager.getPetState();
+        if (testSitPetState) {
+          // Force the pet into sit animation for testing
+          testSitPetState.currentAnimation = 'sit';
+          await storageManager.setPetState(testSitPetState);
+          
+          // Sync pet state to all tabs
+          const tabs = await chrome.tabs.query({});
+          tabs.forEach(tab => {
+            if (tab.id) {
+              chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' }).catch(() => {
+                // Ignore errors for tabs that don't have content script
+              });
+            }
+          });
+          
+          console.log('Test sit animation triggered');
         }
         sendResponse({ success: true });
         break;
@@ -246,44 +299,59 @@ setInterval(async () => {
 
 async function trackFocusTime(): Promise<void> {
   try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const activeTab = tabs[0];
-    
-    if (activeTab && activeTab.url) {
-      const focusStats = await storageManager.getFocusStats();
-      if (focusStats) {
-        // Add focus time
-        focusStats.totalFocusTime += 1; // 1 minute
-        
-        // Check for treat rewards
-        const settings = await storageManager.getUserSettings();
-        if (settings?.focusTracking?.treatRewardInterval) {
-          const minutesSinceLastTreat = focusStats.totalFocusTime % settings.focusTracking.treatRewardInterval;
-          if (minutesSinceLastTreat === 0) {
-            const petState = await storageManager.getPetState();
-            if (petState) {
-              petState.treats += 1;
-              await storageManager.setPetState(petState);
-              
-              // Notify user of treat earned
-              await chrome.notifications.create(`treat_${Date.now()}`, {
-                type: 'basic',
-                iconUrl: 'assets/icons/icon48.png',
-                title: 'focusPet Treat Earned!',
-                message: 'Great job staying focused! Your pet earned a treat.',
-                priority: 1
-              });
-            }
+    const focusStats = await storageManager.getFocusStats();
+    if (focusStats) {
+      // Add focus time regardless of browser state
+      focusStats.totalFocusTime += 1; // 1 minute
+
+      // Ensure lastTreatTime exists
+      if (!focusStats.lastTreatTime) {
+        focusStats.lastTreatTime = 0;
+      }
+
+      // Check for treat rewards
+      const settings = await storageManager.getUserSettings();
+      if (settings?.focusTracking?.treatRewardInterval) {
+        const now = Date.now();
+        const intervalMs = settings.focusTracking.treatRewardInterval * 60 * 1000;
+        if (now - focusStats.lastTreatTime >= intervalMs) {
+          const petState = await storageManager.getPetState();
+          if (petState) {
+            petState.treats += 1;
+            await storageManager.setPetState(petState);
+
+            // Sync pet state to all tabs (including popup)
+            const tabs = await chrome.tabs.query({});
+            console.log(`Background: Sending SYNC_PET_STATE to ${tabs.length} tabs`);
+            tabs.forEach(tab => {
+              if (tab.id) {
+                chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' }).catch(() => {
+                  // Ignore errors for tabs that don't have content script
+                });
+              }
+            });
+
+            // Notify user of treat earned
+            await chrome.notifications.create(`treat_${Date.now()}`, {
+              type: 'basic',
+              iconUrl: 'assets/icons/icon48.png',
+              title: 'focusPet Treat Earned!',
+              message: 'Great job staying focused! Your pet earned a treat.',
+              priority: 1
+            });
+
+            console.log(`Treat earned! Total focus time: ${focusStats.totalFocusTime} minutes`);
+            focusStats.lastTreatTime = now;
           }
         }
-        
-        await storageManager.setFocusStats(focusStats);
       }
+
+      await storageManager.setFocusStats(focusStats);
     }
   } catch (error) {
     console.error('Error tracking focus time:', error);
   }
-} 
+}
 
 // Content scripts are now handled by manifest.json content_scripts field
 // No need for programmatic injection 

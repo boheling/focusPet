@@ -19,6 +19,11 @@ export class StorageManager {
       return result[key] || null;
     } catch (error) {
       console.error(`Error getting storage key ${key}:`, error);
+      // If extension context is invalidated, return null gracefully
+      if (error instanceof Error && error.message?.includes('Extension context invalidated')) {
+        console.log('Extension context invalidated during get operation');
+        return null;
+      }
       return null;
     }
   }
@@ -28,6 +33,13 @@ export class StorageManager {
       await chrome.storage.local.set({ [key]: value });
     } catch (error) {
       console.error(`Error setting storage key ${key}:`, error);
+      // If extension context is invalidated, try to reinitialize
+      if (error instanceof Error && error.message?.includes('Extension context invalidated')) {
+        console.log('Extension context invalidated, attempting to reinitialize...');
+        // Don't throw the error, just log it
+        return;
+      }
+      throw error;
     }
   }
 
@@ -181,6 +193,9 @@ export class StorageManager {
         theme: 'auto',
       };
       await this.setUserSettings(defaultSettings);
+      console.log('Initialized default user settings');
+    } else {
+      console.log('User settings already exist:', userSettings);
     }
 
     const focusStats = await this.getFocusStats();
@@ -191,6 +206,7 @@ export class StorageManager {
         longestStreak: 0,
         treatsEarned: 0,
         achievements: [],
+        lastTreatTime: 0,
       };
       await this.setFocusStats(defaultStats);
     }

@@ -11,6 +11,8 @@ A delightful browser extension that keeps you company and productive with a virt
 - **Rewards & Mood**: Earn treats for focus, unlock animations, and see your pet's mood change with your productivity.
 - **Customization**: Change pet type, name, and appearance. Enable/disable sounds and visual effects.
 - **Persistence**: Pet overlay and state persist across page navigations and reloads.
+- **Real-time Sync**: Settings and pet state sync across all tabs and popup in real-time.
+- **Focus Tracking**: Automatic treat rewards based on configurable intervals.
 
 ## 🏗️ Architecture Overview
 
@@ -76,7 +78,7 @@ focusPet/
 - **Settings & Storage** (`src/shared/storage/index.ts`)
   - User preferences, pet state, cross-tab sync
 - **Background Service Worker** (`src/background/service-worker.ts`)
-  - Handles alarms, reminders, storage sync
+  - Handles alarms, reminders, storage sync, focus tracking
 
 ## 🐾 Pet Overlay & Persistence
 
@@ -98,6 +100,63 @@ focusPet/
 - Custom reminders: One-time, recurring, or conditional
 - Focus rewards: Earn treats, unlock animations, and accessories
 
+## 🎮 Reward System
+
+### Focus Rewards
+- **Treats**: Earned every 30 minutes of focused work (configurable)
+- **New Animations**: Unlock special moves and tricks
+- **Pet Accessories**: Collars, hats, and accessories
+- **Background Themes**: Unlock new environments
+
+### Achievement System
+- **Focus Streaks**: Consecutive days of productivity
+- **Task Completion**: Rewards for finishing to-dos
+- **Break Compliance**: Rewards for taking scheduled breaks
+
+### Treat Reward System
+- **Configurable Intervals**: Set treat reward intervals from 1 minute to several hours
+- **Accurate Tracking**: Uses timestamp-based tracking to prevent duplicate rewards
+- **Real-time Updates**: Popup and overlay update immediately when treats are earned
+- **Notifications**: Desktop notifications when treats are awarded
+- **Cross-tab Sync**: Treats sync across all browser tabs in real-time
+
+### Pet Energy System
+- **Natural Restoration**: Pet energy restores naturally during idle time
+- **Rest-Based Recovery**: The longer the pet rests, the more energy it regains
+- **Visual Feedback**: Pet shows "nap" animation when resting and gaining energy
+- **Active Energy Loss**: Energy decreases when pet is active (recently interacted with)
+- **Realistic Behavior**: Treats provide happiness and reduce hunger, but energy comes from rest
+
+## 💤 Idle, Sit, and Nap Behavior
+
+- **Idle**: Pet is active or waiting for interaction.
+- **Sit**: After 1 minute of no interaction, the pet automatically sits (shows the sit animation).
+- **Nap**: After 2 minutes of no interaction, the pet automatically naps (shows the nap animation).
+- **Return to Idle**: Any interaction (mouse move/click) wakes the pet up and returns it to idle.
+- **Image Requirements**: For best results, use transparent PNGs for sit and nap animations.
+
+These transitions are handled automatically by the pet engine and require no user intervention.
+
+## ⚙️ Settings & Configuration
+
+### Focus Tracking Settings
+- **Enable/Disable**: Toggle focus tracking on/off
+- **Tracking Interval**: How often to check for focus (default: 30 minutes)
+- **Treat Reward Interval**: How often to award treats (default: 30 minutes)
+- **Real-time Sync**: Settings persist and sync across all tabs
+
+### Pet Settings
+- **Pet Type**: Choose from cat, dog, dragon, penguin, bunny
+- **Pet Name**: Customize your pet's name
+- **Sound Effects**: Enable/disable pet sounds
+- **Visual Effects**: Enable/disable animations and effects
+- **Position**: Set pet overlay position (bottom-right, bottom-left, etc.)
+
+### Reminder Settings
+- **System Notifications**: Show notifications even when Chrome is not focused
+- **Sound Alerts**: Enable/disable reminder sounds
+- **Visual Alerts**: Enable/disable reminder animations
+
 ## 🧑‍💻 Development
 
 ### Scripts
@@ -113,9 +172,10 @@ focusPet/
 
 - `public/manifest.json` – Extension manifest (always reference source files for CRXJS)
 - `src/content/overlay.ts` – Overlay logic
-- `src/background/service-worker.ts` – Background logic
-- `src/popup/popup.tsx` – Popup UI
+- `src/background/service-worker.ts` – Background logic, focus tracking, treat rewards
+- `src/popup/popup.tsx` – Popup UI with real-time sync
 - `src/options/options.tsx` – Options/settings UI
+- `src/shared/storage/index.ts` – Storage management and cross-tab sync
 
 ## 🐞 Debugging & Common Issues
 
@@ -142,6 +202,17 @@ focusPet/
 - Ensure React is building correctly
 - Verify popup HTML is loading
 - Check for JavaScript errors in popup console
+
+### Treat Rewards Not Working
+- Check that focus tracking is enabled in settings
+- Verify treat reward interval is set correctly
+- Look for "Treat earned!" messages in service worker console
+- Check that popup receives "SYNC_PET_STATE" messages
+
+### Settings Not Persisting
+- Ensure settings are saved using the "Save Settings" button
+- Check that popup refreshes after saving
+- Look for "Background: Retrieved settings" messages in console
 
 ## 🎨 Pet Types & Behaviors
 
@@ -171,18 +242,19 @@ focusPet/
 - **Recurring**: Daily, weekly, or custom intervals
 - **Conditional**: Trigger based on website or activity
 
-## 🎮 Reward System
+## 🔄 Real-time Sync System
 
-### Focus Rewards
-- **Treats**: Earned every 30 minutes of focused work
-- **New Animations**: Unlock special moves and tricks
-- **Pet Accessories**: Collars, hats, and accessories
-- **Background Themes**: Unlock new environments
+### Cross-tab Synchronization
+- **Pet State**: Changes sync across all tabs immediately
+- **Settings**: Configuration updates propagate to all tabs
+- **Treat Rewards**: Earned treats appear in all tabs instantly
+- **Message System**: Uses Chrome extension messaging for reliable sync
 
-### Achievement System
-- **Focus Streaks**: Consecutive days of productivity
-- **Task Completion**: Rewards for finishing to-dos
-- **Break Compliance**: Rewards for taking scheduled breaks
+### Background Service Worker
+- **Focus Tracking**: Runs every minute to track productivity
+- **Treat Rewards**: Awards treats based on configurable intervals
+- **Notifications**: Sends desktop notifications for rewards
+- **Storage Sync**: Manages all data persistence and cross-tab sync
 
 ## 🤝 Contributing
 
@@ -207,3 +279,5 @@ MIT License – see [LICENSE](LICENSE) for details.
 - All static assets should be placed in `public/` for correct build output
 - For debugging overlay injection, check the service worker logs in the Chrome Extensions page
 - Canvas sizing is automatically handled on page load and window resize
+- The treat reward system uses timestamp-based tracking to prevent duplicate rewards
+- Real-time sync is implemented using Chrome extension messaging between background, popup, and content scripts

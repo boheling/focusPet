@@ -146,6 +146,23 @@
       cursor: not-allowed;
     }
 
+    .add-treat-button {
+      padding: 8px 16px;
+      background: linear-gradient(135deg, #2196F3, #1976D2);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 12px;
+    }
+
+    .add-treat-button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+    }
+
     .pet-animations h3 {
       margin: 0 0 10px 0;
       font-size: 16px;
@@ -312,6 +329,48 @@
       font-size: 12px;
       text-align: center;
       opacity: 0.8;
+    }
+
+    .settings-actions {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .save-button {
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #4CAF50, #45a049);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .save-button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    }
+
+    .save-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .save-status {
+      display: block;
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .save-status.success {
+      color: #4CAF50;
+    }
+
+    .save-status.error {
+      color: #F44336;
     }
   </style>
 </head>

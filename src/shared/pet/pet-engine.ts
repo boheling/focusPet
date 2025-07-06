@@ -20,7 +20,12 @@ export class PetEngine {
   // Update pet state
   async updatePetState(updates: Partial<PetState>): Promise<void> {
     this.petState = { ...this.petState, ...updates };
-    await storageManager.setPetState(this.petState);
+    try {
+      await storageManager.setPetState(this.petState);
+    } catch (error) {
+      console.log('Pet state update failed (extension context may be invalidated):', error);
+      // Continue with local state update even if storage fails
+    }
     this.updateMood();
   }
 
@@ -42,13 +47,13 @@ export class PetEngine {
   onMouseMove(x: number, y: number): void {
     this.mousePosition = { x, y };
     
-    // Pet follows cursor if close enough
+    // Pet follows cursor if close enough, but not when napping
     const distance = Math.sqrt(
       Math.pow(x - this.petState.position.x, 2) + 
       Math.pow(y - this.petState.position.y, 2)
     );
 
-    if (distance < 200 && this.petState.mood !== 'neglected') {
+    if (distance < 200 && this.petState.mood !== 'neglected' && this.petState.currentAnimation !== 'nap') {
       this.moveTowardsMouse();
     }
   }
@@ -69,15 +74,24 @@ export class PetEngine {
     this.petState.happiness = Math.min(100, this.petState.happiness + 10);
     this.petState.lastInteraction = Date.now();
     
-    // Random animation on interaction
-    const animations: PetAnimation[] = ['excited', 'play'];
-    const randomAnimation = animations[Math.floor(Math.random() * animations.length)];
+    // Wake up the pet if it was napping
+    if (this.petState.currentAnimation === 'nap') {
+      this.setAnimation('excited'); // Wake up excited
+    } else {
+      // Random animation on interaction
+      const animations: PetAnimation[] = ['excited', 'play'];
+      const randomAnimation = animations[Math.floor(Math.random() * animations.length)];
+      this.setAnimation(randomAnimation);
+    }
     
-    this.setAnimation(randomAnimation);
-    await this.updatePetState({
-      happiness: this.petState.happiness,
-      lastInteraction: this.petState.lastInteraction
-    });
+    try {
+      await this.updatePetState({
+        happiness: this.petState.happiness,
+        lastInteraction: this.petState.lastInteraction
+      });
+    } catch (error) {
+      console.log('Pet interaction failed to save to storage:', error);
+    }
 
     // Reset to idle after interaction
     setTimeout(() => {
@@ -92,11 +106,15 @@ export class PetEngine {
       this.petState.hunger = Math.max(0, this.petState.hunger - 20);
       
       this.setAnimation('excited');
-      await this.updatePetState({
-        treats: this.petState.treats,
-        happiness: this.petState.happiness,
-        hunger: this.petState.hunger
-      });
+      try {
+        await this.updatePetState({
+          treats: this.petState.treats,
+          happiness: this.petState.happiness,
+          hunger: this.petState.hunger
+        });
+      } catch (error) {
+        console.log('Pet feeding failed to save to storage:', error);
+      }
 
       setTimeout(() => {
         this.setAnimation('idle');
@@ -106,7 +124,11 @@ export class PetEngine {
 
   async addTreats(count: number): Promise<void> {
     this.petState.treats += count;
-    await this.updatePetState({ treats: this.petState.treats });
+    try {
+      await this.updatePetState({ treats: this.petState.treats });
+    } catch (error) {
+      console.log('Adding treats failed to save to storage:', error);
+    }
   }
 
   // Movement
@@ -137,14 +159,39 @@ export class PetEngine {
   private async updatePetBehavior(): Promise<void> {
     const now = Date.now();
     const timeSinceInteraction = now - this.petState.lastInteraction;
-    
+
     // Decrease happiness over time if not interacted with
     if (timeSinceInteraction > 300000) { // 5 minutes
       this.petState.happiness = Math.max(0, this.petState.happiness - 2);
     }
 
-    // Decrease energy over time
-    this.petState.energy = Math.max(0, this.petState.energy - 1);
+    // Sit after 1 minute of inactivity, nap after 2 minutes
+    if (timeSinceInteraction > 120000) { // 2 minutes
+      // Only nap if not already napping
+      if (this.petState.currentAnimation !== 'nap') {
+        this.setAnimation('nap');
+      }
+      // Energy restoration while napping
+      const idleMinutes = Math.floor(timeSinceInteraction / 60000);
+      const energyGain = Math.min(3, idleMinutes); // Max 3 energy per 30-second cycle
+      this.petState.energy = Math.min(100, this.petState.energy + energyGain);
+    } else if (timeSinceInteraction > 60000) { // 1-2 minutes
+      // Only sit if not already sitting or napping
+      if (this.petState.currentAnimation !== 'sit' && this.petState.currentAnimation !== 'nap') {
+        this.setAnimation('sit');
+      }
+      // Energy restoration while sitting
+      const idleMinutes = Math.floor(timeSinceInteraction / 60000);
+      const energyGain = Math.min(2, idleMinutes); // Slightly less than nap
+      this.petState.energy = Math.min(100, this.petState.energy + energyGain);
+    } else {
+      // Decrease energy if recently interacted with (pet is active)
+      this.petState.energy = Math.max(0, this.petState.energy - 1);
+      // Return to idle if was sitting or napping but now active
+      if (this.petState.currentAnimation === 'nap' || this.petState.currentAnimation === 'sit') {
+        this.setAnimation('idle');
+      }
+    }
 
     // Increase hunger over time
     this.petState.hunger = Math.min(100, this.petState.hunger + 1);
@@ -152,17 +199,21 @@ export class PetEngine {
     // Update mood based on stats
     this.updateMood();
 
-    // Random behaviors
-    if (Math.random() < 0.3) {
+    // Random behaviors (less likely when napping or sitting, and never override nap/sit)
+    if (Math.random() < 0.3 && this.petState.currentAnimation !== 'nap' && this.petState.currentAnimation !== 'sit') {
       this.performRandomBehavior();
     }
 
-    await this.updatePetState({
-      happiness: this.petState.happiness,
-      energy: this.petState.energy,
-      hunger: this.petState.hunger,
-      mood: this.petState.mood
-    });
+    try {
+      await this.updatePetState({
+        happiness: this.petState.happiness,
+        energy: this.petState.energy,
+        hunger: this.petState.hunger,
+        mood: this.petState.mood
+      });
+    } catch (error) {
+      console.log('Pet behavior update failed to save to storage:', error);
+    }
   }
 
   private updateMood(): void {
@@ -180,7 +231,7 @@ export class PetEngine {
   }
 
   private performRandomBehavior(): void {
-    const behaviors: PetAnimation[] = ['sit', 'nap', 'play'];
+    const behaviors: PetAnimation[] = ['sit', 'play']; // Removed 'nap' from random behaviors
     const randomBehavior = behaviors[Math.floor(Math.random() * behaviors.length)];
     
     this.setAnimation(randomBehavior);

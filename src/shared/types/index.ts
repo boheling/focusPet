@@ -80,6 +80,7 @@ export interface FocusStats {
   longestStreak: number; // days
   treatsEarned: number;
   achievements: Achievement[];
+  lastTreatTime?: number; // timestamp (ms) of last treat reward
 }
 
 export interface Achievement {

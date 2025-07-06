@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { PetState, UserSettings, Reminder, ReminderType } from '@shared/types';
 import { PetType } from '@shared/types';
@@ -70,11 +70,7 @@ const Popup: React.FC<PopupProps> = () => {
   const [activeTab, setActiveTab] = useState<'pet' | 'reminders' | 'settings'>('pet');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (isExtension) {
       try {
         const [petData, settingsData, remindersData] = await Promise.all([
@@ -82,6 +78,9 @@ const Popup: React.FC<PopupProps> = () => {
           sendMessage('GET_USER_SETTINGS'),
           sendMessage('GET_REMINDERS')
         ]);
+        console.log('Popup: Loaded pet data:', petData);
+        console.log('Popup: Loaded settings from storage:', settingsData);
+        console.log('Popup: Settings focusTracking:', settingsData?.focusTracking);
         setPetState(petData);
         setSettings(settingsData);
         setReminders(remindersData);
@@ -97,7 +96,30 @@ const Popup: React.FC<PopupProps> = () => {
       setReminders(mockReminders);
       setLoading(false);
     }
-  };
+  }, [isExtension]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Listen for sync messages from background script
+  useEffect(() => {
+    if (isExtension) {
+      const handleMessage = (message: any) => {
+        console.log('Popup: Received message:', message);
+        if (message.type === 'SYNC_PET_STATE') {
+          console.log('Popup: Received SYNC_PET_STATE message, refreshing data');
+          loadData();
+        }
+      };
+
+      chrome.runtime.onMessage.addListener(handleMessage);
+      
+      return () => {
+        chrome.runtime.onMessage.removeListener(handleMessage);
+      };
+    }
+  }, [isExtension, loadData]);
 
   const sendMessage = (type: string, data?: any): Promise<any> => {
     return new Promise((resolve, reject) => {
@@ -187,7 +209,13 @@ const Popup: React.FC<PopupProps> = () => {
 
       <div className="content">
         {activeTab === 'pet' && petState && (
-          <PetTab petState={petState} onFeedPet={feedPet} />
+          <PetTab 
+            petState={petState} 
+            onFeedPet={feedPet} 
+            sendMessage={sendMessage}
+            loadData={loadData}
+            isExtension={isExtension}
+          />
         )}
 
         {activeTab === 'reminders' && (
@@ -200,7 +228,11 @@ const Popup: React.FC<PopupProps> = () => {
         )}
 
         {activeTab === 'settings' && settings && (
-          <SettingsTab settings={settings} />
+          <SettingsTab 
+            settings={settings} 
+            sendMessage={sendMessage}
+            setSettings={setSettings}
+          />
         )}
       </div>
     </div>
@@ -210,9 +242,12 @@ const Popup: React.FC<PopupProps> = () => {
 interface PetTabProps {
   petState: PetState;
   onFeedPet: () => void;
+  sendMessage: (type: string, data?: any) => Promise<any>;
+  loadData: () => Promise<void>;
+  isExtension: boolean;
 }
 
-const PetTab: React.FC<PetTabProps> = ({ petState, onFeedPet }) => {
+const PetTab: React.FC<PetTabProps> = ({ petState, onFeedPet, sendMessage, loadData, isExtension }) => {
   return (
     <div className="pet-tab">
       <div className="pet-info">
@@ -264,6 +299,55 @@ const PetTab: React.FC<PetTabProps> = ({ petState, onFeedPet }) => {
         >
           Feed Treat ({petState.treats} left)
         </button>
+        
+        {isExtension && (
+          <>
+            <button 
+              onClick={async () => {
+                try {
+                  await sendMessage('ADD_TREATS', { count: 1 });
+                  await loadData(); // Reload data
+                } catch (error) {
+                  console.error('Error adding treat:', error);
+                }
+              }}
+              className="add-treat-button"
+              style={{ marginTop: '8px' }}
+            >
+              Add Test Treat
+            </button>
+            
+            <button 
+              onClick={async () => {
+                try {
+                  await sendMessage('TEST_NAP');
+                  await loadData(); // Reload data
+                } catch (error) {
+                  console.error('Error testing nap:', error);
+                }
+              }}
+              className="test-nap-button"
+              style={{ marginTop: '8px', backgroundColor: '#4a90e2' }}
+            >
+              Test Nap Animation
+            </button>
+            
+            <button 
+              onClick={async () => {
+                try {
+                  await sendMessage('TEST_SIT');
+                  await loadData(); // Reload data
+                } catch (error) {
+                  console.error('Error testing sit:', error);
+                }
+              }}
+              className="test-sit-button"
+              style={{ marginTop: '8px', backgroundColor: '#8e44ad' }}
+            >
+              Test Sit Animation
+            </button>
+          </>
+        )}
       </div>
 
       <div className="pet-animations">
@@ -378,15 +462,29 @@ const RemindersTab: React.FC<RemindersTabProps> = ({
 
 interface SettingsTabProps {
   settings: UserSettings;
+  sendMessage: (type: string, data?: any) => Promise<any>;
+  setSettings: React.Dispatch<React.SetStateAction<UserSettings | null>>;
 }
 
-const SettingsTab: React.FC<SettingsTabProps> = ({ settings }) => {
+const SettingsTab: React.FC<SettingsTabProps> = ({ settings, sendMessage, setSettings }) => {
   const [selectedPet, setSelectedPet] = useState(settings.petType);
   const [petName, setPetName] = useState(settings.petName);
   const [soundEnabled, setSoundEnabled] = useState(settings.soundEnabled);
   const [visualEffectsEnabled, setVisualEffectsEnabled] = useState(settings.visualEffectsEnabled);
   const [trackingEnabled, setTrackingEnabled] = useState(settings.focusTracking.enabled);
   const [treatRewardInterval, setTreatRewardInterval] = useState(settings.focusTracking.treatRewardInterval);
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  // Update local state when settings prop changes
+  useEffect(() => {
+    setSelectedPet(settings.petType);
+    setPetName(settings.petName);
+    setSoundEnabled(settings.soundEnabled);
+    setVisualEffectsEnabled(settings.visualEffectsEnabled);
+    setTrackingEnabled(settings.focusTracking.enabled);
+    setTreatRewardInterval(settings.focusTracking.treatRewardInterval);
+  }, [settings]);
 
   const handlePetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedPet(e.target.value as PetType);
@@ -405,6 +503,51 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings }) => {
   };
   const handleTreatIntervalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTreatRewardInterval(Number(e.target.value));
+  };
+
+  const saveSettings = async () => {
+    if (!isExtension) return;
+    
+    setSaving(true);
+    setSaveStatus('idle');
+    
+    try {
+      const updatedSettings: UserSettings = {
+        ...settings,
+        petType: selectedPet,
+        petName: petName,
+        soundEnabled: soundEnabled,
+        visualEffectsEnabled: visualEffectsEnabled,
+        focusTracking: {
+          ...settings.focusTracking,
+          enabled: trackingEnabled,
+          treatRewardInterval: Number(treatRewardInterval), // Ensure this is a number
+        }
+      };
+      
+      console.log('Saving settings:', updatedSettings);
+      await sendMessage('UPDATE_USER_SETTINGS', { data: updatedSettings });
+      
+      // Verify the settings were saved by reading them back
+      const savedSettings = await sendMessage('GET_USER_SETTINGS');
+      console.log('Settings after save:', savedSettings);
+      
+      // Update the parent component's settings state
+      setSettings(updatedSettings);
+      
+      setSaveStatus('success');
+      
+      // Reset success message after 2 seconds
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      setSaveStatus('error');
+      
+      // Reset error message after 3 seconds
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -443,8 +586,25 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings }) => {
         <input type="number" min={1} value={treatRewardInterval} onChange={handleTreatIntervalChange} style={{ width: 60 }} /> minutes
       </div>
 
+      <div className="settings-actions">
+        <button 
+          onClick={saveSettings}
+          disabled={saving}
+          className="save-button"
+        >
+          {saving ? 'Saving...' : 'Save Settings'}
+        </button>
+        
+        {saveStatus === 'success' && (
+          <span className="save-status success">✓ Settings saved!</span>
+        )}
+        {saveStatus === 'error' && (
+          <span className="save-status error">✗ Failed to save settings</span>
+        )}
+      </div>
+
       <p className="settings-note">
-        (Dev mode only) These settings are not persisted.<br />To change these settings permanently, visit the options page in the real extension.
+        Settings are now saved permanently and will persist across browser sessions.
       </p>
     </div>
   );

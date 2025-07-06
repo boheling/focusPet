@@ -46,6 +46,7 @@ focusPet/
 - Mood indicator rendering
 - Responsive design with automatic canvas resizing
 - Persistence across page navigations
+- Real-time sync with background service worker
 
 **Responsibilities**:
 - Initialize pet overlay on page load
@@ -54,6 +55,7 @@ focusPet/
 - Display reminder notifications
 - Manage pet positioning
 - Handle canvas resizing on window resize
+- Listen for sync messages from background
 
 **Technical Implementation**:
 ```typescript
@@ -76,6 +78,13 @@ class PetOverlay {
     this.canvas.height = window.innerHeight;
   }
   
+  // Message listener for real-time sync
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'SYNC_PET_STATE') {
+      this.reloadPetState();
+    }
+  });
+  
   // Rendering loop at 60fps
   // Mouse interaction handling
   // Speech bubble management
@@ -87,23 +96,25 @@ class PetOverlay {
 
 ### 2. Background Service Worker (`src/background/service-worker.ts`)
 
-**Purpose**: Manages background tasks, alarms, and cross-tab communication.
+**Purpose**: Manages background tasks, alarms, focus tracking, and cross-tab communication.
 
 **Key Features**:
 - Reminder scheduling and triggering
-- Focus time tracking
+- Focus time tracking with treat rewards
 - Cross-tab state synchronization
 - Browser notification management
 - Storage initialization
 - Message passing between components
+- Real-time treat reward system
 
 **Responsibilities**:
 - Handle Chrome alarms API
 - Process reminder triggers
-- Track user focus time
+- Track user focus time and award treats
 - Manage extension state
 - Handle message passing
 - Initialize default storage values
+- Send sync messages to all tabs
 
 **Technical Implementation**:
 ```typescript
@@ -111,6 +122,57 @@ class PetOverlay {
 chrome.runtime.onInstalled.addListener(async () => {
   await storageManager.initializeDefaults();
 });
+
+// Focus tracking with treat rewards
+async function trackFocusTime(): Promise<void> {
+  const focusStats = await storageManager.getFocusStats();
+  if (focusStats) {
+    focusStats.totalFocusTime += 1; // 1 minute
+    
+    // Check for treat rewards using timestamp-based tracking
+    const settings = await storageManager.getUserSettings();
+    if (settings?.focusTracking?.treatRewardInterval) {
+      const now = Date.now();
+      const intervalMs = settings.focusTracking.treatRewardInterval * 60 * 1000;
+      if (now - focusStats.lastTreatTime >= intervalMs) {
+        // Award treat and sync to all tabs
+        const petState = await storageManager.getPetState();
+        if (petState) {
+          petState.treats += 1;
+          await storageManager.setPetState(petState);
+          
+          // Send sync message to all tabs
+          const tabs = await chrome.tabs.query({});
+          tabs.forEach(tab => {
+            if (tab.id) {
+              chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' });
+            }
+          });
+          
+          // Show notification
+          await chrome.notifications.create(`treat_${Date.now()}`, {
+            type: 'basic',
+            iconUrl: 'assets/icons/icon48.png',
+            title: 'focusPet Treat Earned!',
+            message: 'Great job staying focused! Your pet earned a treat.',
+            priority: 1
+          });
+          
+          focusStats.lastTreatTime = now;
+        }
+      }
+    }
+    await storageManager.setFocusStats(focusStats);
+  }
+}
+
+// Periodic focus tracking
+setInterval(async () => {
+  const settings = await storageManager.getUserSettings();
+  if (settings?.focusTracking?.enabled) {
+    await trackFocusTime();
+  }
+}, 60000); // Check every minute
 
 // Alarm handling
 chrome.alarms.onAlarm.addListener(async (alarm) => {
@@ -125,7 +187,61 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 ```
 
-### 3. Pet Engine (`src/shared/pet/pet-engine.ts`)
+### 3. Popup UI (`src/popup/popup.tsx`)
+
+**Purpose**: Provides the main user interface for interacting with the extension.
+
+**Key Features**:
+- React-based UI with real-time updates
+- Settings management with persistence
+- Pet state display and interaction
+- Reminder creation and management
+- Real-time sync with background service worker
+- Message listener for immediate updates
+
+**Responsibilities**:
+- Display pet state and stats
+- Allow pet feeding and interaction
+- Manage reminder creation and settings
+- Handle settings configuration
+- Sync with background service worker
+- Provide immediate feedback for user actions
+
+**Technical Implementation**:
+```typescript
+const Popup: React.FC<PopupProps> = () => {
+  const [petState, setPetState] = useState<PetState | null>(null);
+  const [settings, setSettings] = useState<UserSettings | null>(null);
+  
+  // Real-time message listener
+  useEffect(() => {
+    if (isExtension) {
+      const handleMessage = (message: any) => {
+        if (message.type === 'SYNC_PET_STATE') {
+          loadData(); // Refresh data immediately
+        }
+      };
+      
+      chrome.runtime.onMessage.addListener(handleMessage);
+      return () => chrome.runtime.onMessage.removeListener(handleMessage);
+    }
+  }, [isExtension, loadData]);
+  
+  // Settings management with real-time sync
+  const saveSettings = async () => {
+    await sendMessage('UPDATE_USER_SETTINGS', { data: updatedSettings });
+    setSettings(updatedSettings);
+  };
+  
+  // Pet interaction
+  const feedPet = async () => {
+    await sendMessage('FEED_PET');
+    await loadData(); // Refresh data
+  };
+}
+```
+
+### 4. Pet Engine (`src/shared/pet/pet-engine.ts`)
 
 **Purpose**: Manages pet behavior, animations, and state transitions.
 
@@ -136,6 +252,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 - Interaction responses
 - Mood calculation based on stats
 - Treat system and rewards
+- Natural energy restoration system
 
 **Responsibilities**:
 - Update pet stats over time
@@ -144,6 +261,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 - Calculate mood based on stats
 - Trigger random behaviors
 - Handle treat feeding and rewards
+- Manage natural energy restoration during idle time
 
 **Technical Implementation**:
 ```typescript
@@ -156,10 +274,20 @@ class PetEngine {
   // Random behavior generation
   // Interaction response handling
   // Treat system management
+  // Natural energy restoration based on idle time
+  // Nap animation when resting and gaining energy
 }
 ```
 
-### 4. Reminder Manager (`src/shared/reminders/reminder-manager.ts`)
+### Pet Idle, Sit, and Nap Logic
+- The pet engine tracks the time since last user interaction.
+- After 1 minute of inactivity, the pet switches to the 'sit' animation (if not already napping).
+- After 2 minutes of inactivity, the pet switches to the 'nap' animation.
+- Any user interaction (mouse move/click) wakes the pet up and returns it to idle.
+- For best results, sit and nap images should be transparent PNGs.
+- This logic is implemented in the `updatePetBehavior` method of the pet engine.
+
+### 5. Reminder Manager (`src/shared/reminders/reminder-manager.ts`)
 
 **Purpose**: Handles reminder creation, scheduling, and triggering.
 
@@ -193,204 +321,195 @@ class ReminderManager {
 }
 ```
 
-### 5. Storage Manager (`src/shared/storage/index.ts`)
+### 6. Storage Manager (`src/shared/storage/index.ts`)
 
 **Purpose**: Manages persistent data storage and cross-tab synchronization.
 
 **Key Features**:
 - Chrome storage API integration
 - Type-safe storage operations
-- Cross-tab synchronization
 - Default data initialization
-- Error handling and fallbacks
+- Cross-tab synchronization
+- Error handling for extension context invalidation
+- Focus stats with treat tracking
 
 **Responsibilities**:
-- Store and retrieve pet state
-- Manage user settings
-- Handle reminder data
-- Track focus statistics
-- Sync across tabs
-- Initialize default values
+- Initialize default pet state and settings
+- Handle storage operations with error recovery
+- Manage focus statistics and treat tracking
+- Provide type-safe storage access
+- Handle extension context invalidation gracefully
 
 **Technical Implementation**:
 ```typescript
 class StorageManager {
-  // Singleton pattern
-  // Chrome storage API wrapper
-  // Type-safe operations
-  // Cross-tab sync
-  // Default initialization
-  // Error handling
+  private static instance: StorageManager;
+  
+  // Singleton pattern for consistent access
+  static getInstance(): StorageManager {
+    if (!StorageManager.instance) {
+      StorageManager.instance = new StorageManager();
+    }
+    return StorageManager.instance;
+  }
+  
+  // Initialize default data with treat tracking
+  async initializeDefaults(): Promise<void> {
+    const focusStats = await this.getFocusStats();
+    if (!focusStats) {
+      const defaultStats: FocusStats = {
+        totalFocusTime: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+        treatsEarned: 0,
+        achievements: [],
+        lastTreatTime: 0, // Track last treat reward time
+      };
+      await this.setFocusStats(defaultStats);
+    }
+  }
+  
+  // Error handling for extension context invalidation
+  async get<T>(key: string): Promise<T | null> {
+    try {
+      const result = await chrome.storage.local.get(key);
+      return result[key] || null;
+    } catch (error) {
+      if (error instanceof Error && error.message?.includes('Extension context invalidated')) {
+        console.log('Extension context invalidated during get operation');
+        return null;
+      }
+      return null;
+    }
+  }
 }
 ```
 
 ## Data Flow
 
-### 1. Extension Initialization
+### 1. Focus Tracking Flow
 ```
-1. Service worker starts
-2. Initialize storage with defaults
-3. Load existing reminders
-4. Schedule active reminders
-5. Start focus tracking
-```
-
-### 2. Content Script Injection
-```
-1. Manifest content_scripts field triggers injection
-2. PetOverlay class initializes
-3. Canvas created with proper sizing
-4. Pet state loaded from storage
-5. Sprites loaded from assets
-6. Event listeners attached
-7. Render loop started
+Background Service Worker (every minute)
+    ↓
+Check if focus tracking is enabled
+    ↓
+Increment total focus time
+    ↓
+Check if treat reward interval has passed
+    ↓
+Award treat and update pet state
+    ↓
+Send SYNC_PET_STATE message to all tabs
+    ↓
+Popup and overlay update immediately
 ```
 
-### 3. User Interaction Flow
+### 2. Settings Update Flow
 ```
-1. User moves mouse → PetEngine.onMouseMove()
-2. Pet position updated
-3. Animation state changes
-4. Canvas re-renders
-5. Pet follows cursor
-```
-
-### 4. Reminder Trigger Flow
-```
-1. Chrome alarm fires
-2. Service worker handles alarm
-3. ReminderManager processes trigger
-4. Notification sent to content script
-5. Pet reacts with animation
-6. Speech bubble displayed
+Popup UI (user changes settings)
+    ↓
+Send UPDATE_USER_SETTINGS message to background
+    ↓
+Background saves settings to storage
+    ↓
+Send response back to popup
+    ↓
+Popup updates local state
+    ↓
+Settings persist across browser sessions
 ```
 
-## Communication Patterns
+### 3. Treat Reward Flow
+```
+Background Service Worker (treat earned)
+    ↓
+Update pet state with new treat
+    ↓
+Update focus stats with lastTreatTime
+    ↓
+Send SYNC_PET_STATE message to all tabs
+    ↓
+Show desktop notification
+    ↓
+Popup and overlay refresh data
+    ↓
+User sees updated treat count immediately
+```
 
-### 1. Content Script ↔ Service Worker
-- **Purpose**: Handle reminder triggers and state updates
-- **Method**: `chrome.runtime.sendMessage()`
-- **Messages**: 
-  - `REMINDER_TRIGGERED`
-  - `UPDATE_PET_STATE`
-  - `GET_PET_STATE`
+## Key Technical Decisions
 
-### 2. Popup ↔ Service Worker
-- **Purpose**: UI interactions and data retrieval
-- **Method**: `chrome.runtime.sendMessage()`
-- **Messages**:
-  - `GET_PET_STATE`
-  - `CREATE_REMINDER`
-  - `FEED_PET`
-  - `GET_REMINDERS`
+### 1. Timestamp-based Treat Tracking
+- **Problem**: Previous modulo-based tracking could award multiple treats per interval
+- **Solution**: Use `lastTreatTime` timestamp to ensure exactly one treat per interval
+- **Implementation**: `now - focusStats.lastTreatTime >= intervalMs`
 
-### 3. Cross-Tab Synchronization
-- **Purpose**: Keep pet state consistent across tabs
-- **Method**: `chrome.tabs.sendMessage()`
-- **Messages**:
-  - `SYNC_PET_STATE`
-  - `SYNC_STORAGE`
+### 2. Real-time Cross-tab Sync
+- **Problem**: Popup and overlay could show stale data
+- **Solution**: Chrome extension messaging system for immediate updates
+- **Implementation**: `SYNC_PET_STATE` messages sent to all tabs
+
+### 3. React State Management
+- **Problem**: Popup could miss updates from background
+- **Solution**: Message listener with `useCallback` for proper cleanup
+- **Implementation**: `chrome.runtime.onMessage.addListener` in useEffect
+
+### 4. Error Handling for Extension Context
+- **Problem**: Extension context invalidation during development
+- **Solution**: Graceful error handling with fallback behavior
+- **Implementation**: Try-catch blocks with context invalidation detection
 
 ## Performance Considerations
 
-### 1. Rendering Optimization
-- Canvas rendering at 60fps
-- Efficient sprite loading
-- Minimal DOM manipulation
-- Hardware acceleration support
-- Proper canvas sizing and resizing
+### 1. Canvas Rendering
+- 60fps rendering loop with requestAnimationFrame
+- Automatic canvas resizing on window resize
+- Efficient sprite-based animation system
 
-### 2. Memory Management
-- Proper cleanup of timers
-- Efficient storage operations
-- Minimal object creation
-- Weak references where appropriate
-- Canvas context state management
+### 2. Background Processing
+- Focus tracking runs every minute (not continuously)
+- Treat rewards use efficient timestamp comparison
+- Storage operations are async and non-blocking
 
-### 3. Battery Optimization
-- Support reduced motion
-- Efficient animation loops
-- Minimal background processing
-- Smart focus tracking intervals
-- Conditional rendering based on visibility
+### 3. Memory Management
+- Proper cleanup of event listeners
+- Singleton pattern for storage manager
+- React useEffect cleanup for message listeners
 
 ## Security Considerations
 
-### 1. Content Scripts
-- Minimal DOM access
-- Secure message passing
-- No direct script injection
-- Sandboxed execution
-- Proper canvas isolation
+### 1. Content Script Isolation
+- Pet overlay runs in isolated context
+- No access to page content or scripts
+- Safe mouse event handling
 
-### 2. Storage
-- Local storage only
-- No sensitive data collection
-- Secure data validation
-- Type-safe operations
-- Cross-tab sync security
+### 2. Storage Security
+- Chrome storage API provides secure data persistence
+- No sensitive data stored (only pet state and settings)
+- Extension context validation
 
-### 3. Permissions
-- Minimal required permissions
-- Clear permission usage
-- Secure API access
-- Proper error handling
+### 3. Message Passing
+- Type-safe message handling
+- Error handling for invalid messages
+- Secure cross-tab communication
 
-## Build System
+## Future Enhancements
 
-### Vite + CRXJS Configuration
-- **Vite**: Fast build tool with hot reload
-- **CRXJS**: Chrome extension plugin for Vite
-- **TypeScript**: Type safety and better DX
-- **React**: UI components for popup and options
+### 1. Advanced Focus Tracking
+- Website-based focus detection
+- Productivity scoring algorithms
+- Detailed focus analytics
 
-### Build Process
-```
-1. TypeScript compilation
-2. Vite bundling with CRXJS
-3. Asset processing and copying
-4. Manifest generation
-5. Output to dist/ directory
-```
+### 2. Enhanced Pet System
+- More pet types and animations
+- Pet evolution and growth
+- Social features between pets
 
-### Development Workflow
-- Hot reload for popup development
-- Automatic rebuild on file changes
-- Source maps for debugging
-- Type checking during build
-- Linting and code quality checks
+### 3. Gamification Features
+- Achievement system implementation
+- Streak tracking and rewards
+- Community challenges
 
-## Deployment
-
-### Development
-- `npm run dev` - Development server with hot reload
-- Load `dist/` as unpacked extension
-- Automatic rebuilds on changes
-
-### Production
-- `npm run build` - Production build
-- Optimized and minified output
-- Load `dist/` as unpacked extension
-- Manual reload for updates
-
-## Monitoring and Debugging
-
-### Console Logging
-- Content script: "focusPet:" prefixed messages
-- Service worker: Chrome extension console
-- Popup: DevTools console
-- Canvas sizing: "focusPet: Resizing canvas to" messages
-
-### Chrome DevTools
-- Extension popup inspection
-- Service worker debugging
-- Content script debugging
-- Storage inspection
-- Network monitoring
-
-### Common Debug Points
-- Canvas sizing on page navigation
-- Content script injection
-- Service worker activation
-- Message passing between components
-- Storage synchronization 
+### 4. Performance Optimizations
+- Web Workers for heavy computations
+- Service Worker caching strategies
+- Lazy loading of pet assets 
