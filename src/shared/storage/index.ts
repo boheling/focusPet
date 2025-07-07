@@ -196,7 +196,7 @@ export class StorageManager {
         mood: 'content',
         happiness: 75,
         energy: 100,
-        hunger: 50,
+        satiety: 100,
         treats: 5,
         unlockedAnimations: ['idle', 'walk', 'sit', 'nap'],
         accessories: [],
@@ -210,6 +210,14 @@ export class StorageManager {
       if (!petState.unlockedAnimations.includes('nap')) {
         console.log('focusPet: Adding nap animation to existing pet');
         petState.unlockedAnimations.push('nap');
+        await this.setPetState(petState);
+      }
+      
+      // Migrate hunger to satiety for existing pets
+      if ('hunger' in petState && !('satiety' in petState)) {
+        console.log('focusPet: Migrating hunger to satiety for existing pet');
+        (petState as any).satiety = 100 - (petState as any).hunger;
+        delete (petState as any).hunger;
         await this.setPetState(petState);
       }
     }

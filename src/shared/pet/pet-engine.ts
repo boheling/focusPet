@@ -332,8 +332,17 @@ export class PetEngine {
   async feedPet(): Promise<void> {
     if (this.petState.treats > 0) {
       this.petState.treats--;
-      this.petState.happiness = Math.min(100, this.petState.happiness + 15);
-      this.petState.hunger = Math.max(0, this.petState.hunger - 20);
+      
+      // Only increase happiness if it's not already at max
+      if (this.petState.happiness < 100) {
+        this.petState.happiness = Math.min(100, this.petState.happiness + 15);
+      }
+
+      // Only increase satiety if it's not already at max
+      if (this.petState.satiety < 100) {
+        this.petState.satiety = Math.min(100, this.petState.satiety + 15);
+      }
+    
       
       this.setAnimation('excited');
       this.speak('feed');
@@ -342,7 +351,7 @@ export class PetEngine {
         await this.updatePetState({
           treats: this.petState.treats,
           happiness: this.petState.happiness,
-          hunger: this.petState.hunger
+          satiety: this.petState.satiety
         });
       } catch (error) {
         // Silent error handling
@@ -423,8 +432,8 @@ export class PetEngine {
       }
     }
 
-    // Increase hunger over time
-    this.petState.hunger = Math.min(100, this.petState.hunger + 1);
+    // Decrease satiety over time (pet gets hungry)
+    this.petState.satiety = Math.max(0, this.petState.satiety - 1);
 
     // Update mood based on stats
     this.updateMood();
@@ -433,7 +442,7 @@ export class PetEngine {
       await this.updatePetState({
         happiness: this.petState.happiness,
         energy: this.petState.energy,
-        hunger: this.petState.hunger,
+        satiety: this.petState.satiety,
         mood: this.petState.mood
       });
     } catch (error) {
@@ -442,7 +451,7 @@ export class PetEngine {
   }
 
   private updateMood(): void {
-    const avgStats = (this.petState.happiness + this.petState.energy + (100 - this.petState.hunger)) / 3;
+    const avgStats = (this.petState.happiness + this.petState.energy + this.petState.satiety) / 3;
     
     if (avgStats >= 80) {
       this.petState.mood = 'happy';

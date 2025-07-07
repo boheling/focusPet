@@ -146,7 +146,7 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
         if (feedingPetState && feedingPetState.treats > 0) {
           feedingPetState.treats--;
           feedingPetState.happiness = Math.min(100, feedingPetState.happiness + 15);
-          feedingPetState.hunger = Math.max(0, feedingPetState.hunger - 20);
+          feedingPetState.satiety = Math.min(100, feedingPetState.satiety + 20);
           await storageManager.setPetState(feedingPetState);
           
           // Sync pet state to all tabs

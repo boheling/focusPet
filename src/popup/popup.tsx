@@ -13,7 +13,7 @@ const mockPetState: PetState = {
   mood: 'happy',
   happiness: 90,
   energy: 80,
-  hunger: 20,
+  satiety: 100,
   treats: 5,
   unlockedAnimations: ['idle', 'walk', 'sit'],
   accessories: [],
@@ -401,14 +401,14 @@ const PetTab: React.FC<PetTabProps> = ({ petState, onFeedPet }) => {
         </div>
 
         <div className="stat">
-          <label>Hunger</label>
+          <label>Satiety</label>
           <div className="progress-bar">
             <div 
               className="progress-fill" 
-              style={{ width: `${100 - petState.hunger}%` }}
+              style={{ width: `${petState.satiety || 0}%` }}
             />
           </div>
-          <span>{100 - petState.hunger}%</span>
+          <span>{petState.satiety || 0}%</span>
         </div>
       </div>
 

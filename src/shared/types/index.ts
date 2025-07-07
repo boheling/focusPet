@@ -11,7 +11,7 @@ export interface PetState {
   mood: PetMood;
   happiness: number; // 0-100
   energy: number; // 0-100
-  hunger: number; // 0-100
+  satiety: number; // 0-100 (100 = full/satisfied)
   treats: number;
   unlockedAnimations: PetAnimation[];
   accessories: string[];
