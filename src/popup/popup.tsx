@@ -30,6 +30,14 @@ const mockSettings: UserSettings = {
   petPosition: 'bottom-right',
   reminderDefaults: { soundEnabled: true, visualEnabled: true, systemNotifications: true },
   focusTracking: { enabled: true, trackingInterval: 30, treatRewardInterval: 30 },
+  analytics: {
+    enabled: true,
+    trackDomains: true,
+    trackFocusTime: true,
+    trackPetInteractions: true,
+    storyGeneration: true,
+    dataRetentionDays: 7,
+  },
   theme: 'auto',
 };
 
@@ -69,6 +77,7 @@ const Popup: React.FC<PopupProps> = () => {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [activeTab, setActiveTab] = useState<'pet' | 'reminders' | 'settings'>('pet');
   const [loading, setLoading] = useState(true);
+  const [analyticsSummary, setAnalyticsSummary] = useState<any | null>(null);
 
   const loadData = useCallback(async () => {
     if (isExtension) {
@@ -173,6 +182,18 @@ const Popup: React.FC<PopupProps> = () => {
     }
   };
 
+  // TEMP: Test analytics summary
+  const testAnalytics = async () => {
+    try {
+      const summary = await sendMessage('TEST_ANALYTICS_SUMMARY');
+      setAnalyticsSummary(summary);
+      console.log('Popup: Analytics summary:', summary);
+    } catch (error) {
+      setAnalyticsSummary({ error: error instanceof Error ? error.message : String(error) });
+      console.error('Popup: Error getting analytics summary:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="popup-container">
@@ -234,6 +255,29 @@ const Popup: React.FC<PopupProps> = () => {
             setSettings={setSettings}
           />
         )}
+        {/* TEMP: Test Analytics Button */}
+        <div style={{ marginTop: 24, textAlign: 'center' }}>
+          <button onClick={testAnalytics} style={{ padding: '8px 16px', borderRadius: 6, background: '#667eea', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer' }}>
+            Test Analytics
+          </button>
+          {analyticsSummary && (
+            <pre style={{ 
+              textAlign: 'left', 
+              margin: '16px auto', 
+              background: '#f5f5f5', 
+              color: '#333',
+              padding: 12, 
+              borderRadius: 6, 
+              maxWidth: 320, 
+              overflowX: 'auto',
+              fontSize: '12px',
+              lineHeight: '1.4',
+              border: '1px solid #ddd'
+            }}>
+              {JSON.stringify(analyticsSummary, null, 2)}
+            </pre>
+          )}
+        </div>
       </div>
     </div>
   );

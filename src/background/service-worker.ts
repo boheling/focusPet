@@ -1,5 +1,10 @@
 import { reminderManager } from '@shared/reminders/reminder-manager';
 import { storageManager } from '@shared/storage';
+import { contentAnalyzer } from '@shared/analytics/content-analyzer';
+
+// Initialize content analyzer (browsing activity tracking)
+// This will start tracking as soon as the service worker loads
+// No need to call any methods, the constructor handles setup
 
 // Initialize storage and reminders when service worker starts
 chrome.runtime.onStartup.addListener(async () => {
@@ -176,6 +181,18 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
           // Reminder snoozed
         }
         sendResponse({ success: true });
+        break;
+
+// TEMPORARY: Test analytics summary
+      case 'TEST_ANALYTICS_SUMMARY':
+        try {
+          const summary = await contentAnalyzer.getActivitySummary(1); // last 1 day
+          console.log('focusPet: Analytics summary (last 1 day):', summary);
+          sendResponse({ success: true, data: summary });
+        } catch (error) {
+          console.error('focusPet: Error getting analytics summary:', error);
+          sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+        }
         break;
 
       default:

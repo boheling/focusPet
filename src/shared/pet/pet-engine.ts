@@ -387,18 +387,6 @@ export class PetEngine {
     this.behaviorTimer = window.setInterval(() => {
       this.updatePetBehavior();
     }, 30000); // Update every 30 seconds
-    
-    // Start mood-based speech loop
-    this.startMoodSpeechLoop();
-  }
-
-  private startMoodSpeechLoop(): void {
-    // Speak based on mood every 2-5 minutes
-    setInterval(() => {
-      if (Math.random() < 0.3) { // 30% chance to speak
-        this.speak('mood');
-      }
-    }, 120000 + Math.random() * 180000); // 2-5 minutes
   }
 
   private async updatePetBehavior(): Promise<void> {
@@ -480,7 +468,7 @@ export class PetEngine {
   }
 
   // Conversation system
-  private speak(context: 'pet' | 'feed' | 'wake' | 'nap' | 'mood'): void {
+  private speak(context: 'pet' | 'feed' | 'wake' | 'nap'): void {
     const now = Date.now();
     if (now - this.lastSpeechTime < this.speechCooldown) {
       return; // Don't speak too frequently
@@ -489,21 +477,9 @@ export class PetEngine {
     const petResponses = PET_RESPONSES[this.petState.type];
     if (!petResponses) return;
 
-    let message = '';
-    
-    if (context === 'mood') {
-      const moodResponses = petResponses[this.petState.mood];
-      if (moodResponses && moodResponses.length > 0) {
-        message = moodResponses[Math.floor(Math.random() * moodResponses.length)];
-      }
-    } else {
-      const interactionResponses = petResponses.interactions[context];
-      if (interactionResponses && interactionResponses.length > 0) {
-        message = interactionResponses[Math.floor(Math.random() * interactionResponses.length)];
-      }
-    }
-
-    if (message) {
+    const interactionResponses = petResponses.interactions[context];
+    if (interactionResponses && interactionResponses.length > 0) {
+      const message = interactionResponses[Math.floor(Math.random() * interactionResponses.length)];
       this.lastSpeechTime = now;
       this.showSpeechBubble(message);
     }

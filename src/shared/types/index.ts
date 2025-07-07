@@ -61,6 +61,14 @@ export interface UserSettings {
     trackingInterval: number; // minutes
     treatRewardInterval: number; // minutes
   };
+  analytics: {
+    enabled: boolean;
+    trackDomains: boolean;
+    trackFocusTime: boolean;
+    trackPetInteractions: boolean;
+    storyGeneration: boolean;
+    dataRetentionDays: number;
+  };
   theme: 'light' | 'dark' | 'auto';
 }
 
@@ -81,6 +89,52 @@ export interface FocusStats {
   treatsEarned: number;
   achievements: Achievement[];
   lastTreatTime?: number; // timestamp (ms) of last treat reward
+}
+
+// Analytics Types
+export type ActivityType = 'work' | 'research' | 'social' | 'entertainment' | 'shopping' | 'general';
+export type FocusLevel = 'high' | 'medium' | 'low';
+
+export interface BrowsingActivity {
+  domain: string;
+  pageTitle: string;
+  timeSpent: number; // minutes
+  focusLevel: FocusLevel;
+  activityType: ActivityType;
+  timestamp: number;
+  tabId?: number;
+}
+
+export interface BedtimeStory {
+  date: string;
+  title: string;
+  content: string;
+  mood: string;
+  stats: {
+    focusTime: number;
+    treatsEarned: number;
+    breaksTaken: number;
+    petInteractions: number;
+  };
+  highlights: string[];
+  recommendations: string[];
+}
+
+export interface AnalyticsSettings {
+  enabled: boolean;
+  trackDomains: boolean;
+  trackFocusTime: boolean;
+  trackPetInteractions: boolean;
+  storyGeneration: boolean;
+  dataRetentionDays: number;
+}
+
+// Analytics Data
+export interface AnalyticsData {
+  activityLog: BrowsingActivity[];
+  lastUpdated: number;
+  dailyStories: BedtimeStory[];
+  settings: AnalyticsSettings;
 }
 
 export interface Achievement {
@@ -114,6 +168,7 @@ export const STORAGE_KEYS = {
   REMINDERS: 'focusPet_reminders',
   FOCUS_STATS: 'focusPet_focusStats',
   FOCUS_SESSIONS: 'focusPet_focusSessions',
+  ANALYTICS_DATA: 'focusPet_analyticsData',
 } as const;
 
 // Events

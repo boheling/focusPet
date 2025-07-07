@@ -1,4 +1,4 @@
-import { STORAGE_KEYS, PetState, UserSettings, Reminder, FocusStats, FocusSession } from '../types';
+import { STORAGE_KEYS, PetState, UserSettings, Reminder, FocusStats, FocusSession, AnalyticsData } from '../types';
 
 export class StorageManager {
   private static instance: StorageManager;
@@ -133,6 +133,15 @@ export class StorageManager {
     }
   }
 
+  // Analytics data management
+  async getAnalyticsData(): Promise<AnalyticsData | null> {
+    return this.get<AnalyticsData>(STORAGE_KEYS.ANALYTICS_DATA);
+  }
+
+  async setAnalyticsData(data: AnalyticsData): Promise<void> {
+    await this.set(STORAGE_KEYS.ANALYTICS_DATA, data);
+  }
+
   // Cross-tab synchronization
   async syncAcrossTabs(): Promise<void> {
     try {
@@ -196,6 +205,14 @@ export class StorageManager {
           enabled: true,
           trackingInterval: 30,
           treatRewardInterval: 30,
+        },
+        analytics: {
+          enabled: true,
+          trackDomains: true,
+          trackFocusTime: true,
+          trackPetInteractions: true,
+          storyGeneration: true,
+          dataRetentionDays: 7,
         },
         theme: 'auto',
       };
