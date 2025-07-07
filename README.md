@@ -13,6 +13,9 @@ A delightful browser extension that keeps you company and productive with a virt
 - **Persistence**: Pet overlay and state persist across page navigations and reloads.
 - **Real-time Sync**: Settings and pet state sync across all tabs and popup in real-time.
 - **Focus Tracking**: Automatic treat rewards based on configurable intervals.
+- **Analytics & Insights**: Track browsing activity, focus levels, and productivity patterns.
+- **Bedtime Stories**: AI-generated stories from your pet's perspective about your daily/weekly activities.
+- **Smart Speech**: Pet only speaks during meaningful interactions (feeding, napping, waking up).
 
 ## 🏗️ Architecture Overview
 
@@ -79,6 +82,10 @@ focusPet/
   - User preferences, pet state, cross-tab sync
 - **Background Service Worker** (`src/background/service-worker.ts`)
   - Handles alarms, reminders, storage sync, focus tracking
+- **Analytics System** (`src/shared/analytics/content-analyzer.ts`)
+  - Browsing activity tracking, domain categorization, focus level estimation
+- **Story Generator** (`src/shared/analytics/story-generator.ts`)
+  - AI-powered bedtime stories from pet's perspective
 
 ## 🐾 Pet Overlay & Persistence
 
@@ -127,6 +134,41 @@ focusPet/
 - **Active Energy Loss**: Energy decreases when pet is active (recently interacted with)
 - **Realistic Behavior**: Treats provide happiness and reduce hunger, but energy comes from rest
 
+## 📊 Analytics & Insights
+
+### Activity Tracking
+- **Smart Domain Tracking**: Automatically categorizes websites (work, research, social, entertainment, shopping)
+- **Focus Level Estimation**: Determines if you're being productive or just browsing
+- **Time Spent Analysis**: Tracks how long you spend on different types of activities
+- **Cross-tab Continuity**: Maintains tracking across page navigations within the same domain
+
+### Privacy-First Design
+- **No Page Titles**: Only tracks domains, not specific pages or content
+- **Local Storage**: All data stays on your device
+- **Configurable Retention**: Choose how long to keep analytics data
+- **Opt-in Features**: Analytics can be completely disabled
+
+## 📖 Bedtime Stories
+
+### AI-Generated Narratives
+- **Pet's Perspective**: Stories written from your pet's point of view
+- **Daily Summaries**: "Today, my human spent 180 minutes being very focused! I watched them work on GitHub and Stack Overflow, and they earned 3 treats! 😸"
+- **Weekly Digests**: Longer stories covering your week's activities and achievements
+- **Emotional Connection**: Focuses on what your pet cares about - your well-being, breaks, and growth
+
+### Story Features
+- **Realistic Pet Data**: Includes treats earned, breaks taken, reminders given, interactions
+- **Mood-Based Stories**: Different story styles based on your activity level
+- **Pet-Specific Language**: Each pet type has unique speech patterns and expressions
+- **Growth Focus**: Emphasizes personal development and healthy habits
+
+### Story Examples
+**Cat Story:**
+> "Today, my human spent 180 minutes being very focused! I watched them work on GitHub and Stack Overflow, and they earned 3 treats! 😸 I noticed they took 4 breaks today. That's very responsible! I reminded them about 2 important things. My human seemed content today. I tried to keep them company with 12 interactions."
+
+**Dog Story:**
+> "Woof! My human was so productive today! They worked for 240 minutes and I gave them 4 treats! 🐕 I made sure my human took 5 good breaks today. I'm such a good helper! 🐶 My human's mood was happy today. I wagged my tail 15 times to cheer them up!"
+
 ## 💤 Idle and Nap Behavior
 
 - **Idle**: Pet is active or waiting for interaction.
@@ -137,6 +179,17 @@ focusPet/
 
 These transitions are handled automatically by the pet engine and require no user intervention.
 
+## 🗣️ Pet Speech System
+
+The pet only speaks during meaningful moments to avoid distraction:
+
+- **When you interact with it** (click/pet) - "Purrrr! That feels so good! 😸"
+- **When you feed it a treat** - "Meow! Thank you for the treat! 🐱"
+- **When it wakes up from a nap** - "Meow! I was having such a nice nap! 😺"
+- **When it goes to nap** - "Zzz... so sleepy... 😴"
+
+No random speech - only meaningful interactions!
+
 ## ⚙️ Settings & Configuration
 
 ### Focus Tracking Settings
@@ -144,6 +197,14 @@ These transitions are handled automatically by the pet engine and require no use
 - **Tracking Interval**: How often to check for focus (default: 30 minutes)
 - **Treat Reward Interval**: How often to award treats (default: 30 minutes)
 - **Real-time Sync**: Settings persist and sync across all tabs
+
+### Analytics Settings
+- **Enable/Disable**: Toggle analytics tracking on/off
+- **Domain Tracking**: Track which websites you visit
+- **Focus Time Tracking**: Monitor productive vs. non-productive time
+- **Pet Interactions**: Track how often you interact with your pet
+- **Story Generation**: Enable AI-generated bedtime stories
+- **Data Retention**: How long to keep analytics data (default: 7 days)
 
 ### Pet Settings
 - **Pet Type**: Choose from cat, dog, dragon, penguin, bunny
@@ -209,6 +270,18 @@ These transitions are handled automatically by the pet engine and require no use
 - Look for "Treat earned!" messages in service worker console
 - Check that popup receives "SYNC_PET_STATE" messages
 
+### Analytics Not Working
+- Ensure analytics is enabled in settings
+- Check that you've spent at least 1 minute on a page for activity to be logged
+- Look for "focusPet: Started tracking tab" messages in service worker console
+- Verify that domain categorization is working correctly
+
+### Story Generation Issues
+- Ensure you have browsing activity data before generating stories
+- Check that analytics is enabled and tracking data
+- Look for "focusPet: Generated daily/weekly story" messages in console
+- Verify that popup can communicate with background service worker
+
 ### Settings Not Persisting
 - Ensure settings are saved using the "Save Settings" button
 - Check that popup refreshes after saving
@@ -248,11 +321,15 @@ These transitions are handled automatically by the pet engine and require no use
 - **Pet State**: Changes sync across all tabs immediately
 - **Settings**: Configuration updates propagate to all tabs
 - **Treat Rewards**: Earned treats appear in all tabs instantly
+- **Analytics Data**: Activity tracking syncs across all tabs
+- **Story Storage**: Generated stories persist across sessions
 - **Message System**: Uses Chrome extension messaging for reliable sync
 
 ### Background Service Worker
 - **Focus Tracking**: Runs every minute to track productivity
 - **Treat Rewards**: Awards treats based on configurable intervals
+- **Analytics Processing**: Processes browsing activity and categorizes domains
+- **Story Generation**: Creates AI-powered bedtime stories from pet's perspective
 - **Notifications**: Sends desktop notifications for rewards
 - **Storage Sync**: Manages all data persistence and cross-tab sync
 
@@ -280,4 +357,7 @@ MIT License – see [LICENSE](LICENSE) for details.
 - For debugging overlay injection, check the service worker logs in the Chrome Extensions page
 - Canvas sizing is automatically handled on page load and window resize
 - The treat reward system uses timestamp-based tracking to prevent duplicate rewards
+- Analytics tracking maintains continuity across page navigations within the same domain
+- Story generation uses AI templates with pet-specific language and emotional focus
 - Real-time sync is implemented using Chrome extension messaging between background, popup, and content scripts
+- Pet speech is limited to meaningful interactions to avoid distraction during work
