@@ -156,13 +156,30 @@ export class ContentAnalyzer {
     const domain = this.extractDomain(tab.url);
     const activityType = this.categorizeDomain(domain);
 
-    // Start timer for this tab
-    this.tabTimers.set(tabId, {
-      startTime: Date.now(),
-      domain
-    });
+    // Check if we already have a timer for this tab
+    const existingTimer = this.tabTimers.get(tabId);
+    
+    // Only start a new timer if:
+    // 1. No existing timer for this tab, OR
+    // 2. Domain has changed (user navigated to a different website)
+    if (!existingTimer || existingTimer.domain !== domain) {
+      // If domain changed, log the previous activity first
+      if (existingTimer && existingTimer.domain !== domain) {
+        const timeSpent = Math.floor((Date.now() - existingTimer.startTime) / 60000); // minutes
+        if (timeSpent > 0) {
+          await this.logActivity(existingTimer.domain, timeSpent);
+        }
+      }
+      
+      // Start new timer for this tab/domain
+      this.tabTimers.set(tabId, {
+        startTime: Date.now(),
+        domain
+      });
 
-    console.log(`focusPet: Started tracking tab ${tabId} on ${domain} (${activityType})`);
+      console.log(`focusPet: Started tracking tab ${tabId} on ${domain} (${activityType})`);
+    }
+    // If same domain, don't restart the timer - just continue tracking
   }
 
   private async handleTabActivation(tabId: number): Promise<void> {

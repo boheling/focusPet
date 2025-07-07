@@ -169,6 +169,7 @@ export const STORAGE_KEYS = {
   FOCUS_STATS: 'focusPet_focusStats',
   FOCUS_SESSIONS: 'focusPet_focusSessions',
   ANALYTICS_DATA: 'focusPet_analyticsData',
+  STORIES: 'focusPet_stories',
 } as const;
 
 // Events

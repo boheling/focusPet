@@ -1,6 +1,7 @@
 import { reminderManager } from '@shared/reminders/reminder-manager';
 import { storageManager } from '@shared/storage';
 import { contentAnalyzer } from '@shared/analytics/content-analyzer';
+import { StoryGenerator } from '@shared/analytics/story-generator';
 
 // Initialize content analyzer (browsing activity tracking)
 // This will start tracking as soon as the service worker loads
@@ -195,6 +196,60 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
         }
         break;
 
+      case 'GENERATE_DAILY_STORY':
+        try {
+          const summary = await contentAnalyzer.getActivitySummary(1); // last 1 day
+          if (summary && summary.totalTime > 0) {
+            const story = StoryGenerator.generateStory(summary, 'daily');
+            await storageManager.addStory(story);
+            console.log('focusPet: Generated daily story:', story.title);
+            sendResponse({ success: true, data: story });
+          } else {
+            sendResponse({ success: false, error: 'No activity data available for story generation' });
+          }
+        } catch (error) {
+          console.error('focusPet: Error generating daily story:', error);
+          sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+        }
+        break;
+
+      case 'GENERATE_WEEKLY_STORY':
+        try {
+          const summary = await contentAnalyzer.getActivitySummary(7); // last 7 days
+          if (summary && summary.totalTime > 0) {
+            const story = StoryGenerator.generateStory(summary, 'weekly');
+            await storageManager.addStory(story);
+            console.log('focusPet: Generated weekly story:', story.title);
+            sendResponse({ success: true, data: story });
+          } else {
+            sendResponse({ success: false, error: 'No activity data available for story generation' });
+          }
+        } catch (error) {
+          console.error('focusPet: Error generating weekly story:', error);
+          sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+        }
+        break;
+
+      case 'GET_STORIES':
+        try {
+          const stories = await storageManager.getStories();
+          sendResponse({ success: true, data: stories });
+        } catch (error) {
+          console.error('focusPet: Error getting stories:', error);
+          sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+        }
+        break;
+
+      case 'GET_LATEST_STORY':
+        try {
+          const story = await storageManager.getLatestStory();
+          sendResponse({ success: true, data: story });
+        } catch (error) {
+          console.error('focusPet: Error getting latest story:', error);
+          sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+        }
+        break;
+
       default:
         sendResponse({ success: false, error: 'Unknown message type' });
     }
@@ -305,13 +360,18 @@ async function trackFocusTime(): Promise<void> {
             });
 
             // Notify user of treat earned
-            await chrome.notifications.create(`treat_${Date.now()}`, {
-              type: 'basic',
-              iconUrl: 'assets/icons/icon48.png',
-              title: 'focusPet Treat Earned!',
-              message: 'Great job staying focused! Your pet earned a treat.',
-              priority: 1
-            });
+            try {
+              await chrome.notifications.create(`treat_${Date.now()}`, {
+                type: 'basic',
+                iconUrl: 'assets/icons/icon48.png',
+                title: 'focusPet Treat Earned!',
+                message: 'Great job staying focused! Your pet earned a treat.',
+                priority: 1
+              });
+            } catch (notificationError) {
+              console.log('focusPet: Could not create notification with icon:', notificationError);
+              // Don't try fallback since iconUrl is required for basic notifications
+            }
 
             // Treat earned
             focusStats.lastTreatTime = now;

@@ -4,6 +4,12 @@ export type ActivityType = 'work' | 'research' | 'social' | 'entertainment' | 's
 
 export type FocusLevel = 'high' | 'medium' | 'low';
 
+export interface AnalyticsData {
+  totalTime: number;
+  activityBreakdown: Record<ActivityType, number>;
+  topDomains: string[];
+}
+
 export interface BrowsingActivity {
   domain: string;
   pageTitle: string;

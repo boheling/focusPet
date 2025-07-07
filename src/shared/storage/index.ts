@@ -1,4 +1,5 @@
 import { STORAGE_KEYS, PetState, UserSettings, Reminder, FocusStats, FocusSession, AnalyticsData } from '../types';
+import { StoryData } from '../analytics/story-generator';
 
 export class StorageManager {
   private static instance: StorageManager;
@@ -140,6 +141,31 @@ export class StorageManager {
 
   async setAnalyticsData(data: AnalyticsData): Promise<void> {
     await this.set(STORAGE_KEYS.ANALYTICS_DATA, data);
+  }
+
+  // Story management
+  async getStories(): Promise<StoryData[]> {
+    const stories = await this.get<StoryData[]>(STORAGE_KEYS.STORIES);
+    return stories || [];
+  }
+
+  async setStories(stories: StoryData[]): Promise<void> {
+    await this.set(STORAGE_KEYS.STORIES, stories);
+  }
+
+  async addStory(story: StoryData): Promise<void> {
+    const stories = await this.getStories();
+    stories.unshift(story); // Add to beginning
+    // Keep only last 30 stories
+    if (stories.length > 30) {
+      stories.splice(30);
+    }
+    await this.setStories(stories);
+  }
+
+  async getLatestStory(): Promise<StoryData | null> {
+    const stories = await this.getStories();
+    return stories.length > 0 ? stories[0] : null;
   }
 
   // Cross-tab synchronization

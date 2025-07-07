@@ -78,6 +78,8 @@ const Popup: React.FC<PopupProps> = () => {
   const [activeTab, setActiveTab] = useState<'pet' | 'reminders' | 'settings'>('pet');
   const [loading, setLoading] = useState(true);
   const [analyticsSummary, setAnalyticsSummary] = useState<any | null>(null);
+  const [currentStory, setCurrentStory] = useState<any | null>(null);
+  const [stories, setStories] = useState<any[]>([]);
 
   const loadData = useCallback(async () => {
     if (isExtension) {
@@ -194,6 +196,37 @@ const Popup: React.FC<PopupProps> = () => {
     }
   };
 
+  // Story generation functions
+  const generateDailyStory = async () => {
+    try {
+      const story = await sendMessage('GENERATE_DAILY_STORY');
+      setCurrentStory(story);
+      console.log('Popup: Generated daily story:', story);
+    } catch (error) {
+      console.error('Popup: Error generating daily story:', error);
+    }
+  };
+
+  const generateWeeklyStory = async () => {
+    try {
+      const story = await sendMessage('GENERATE_WEEKLY_STORY');
+      setCurrentStory(story);
+      console.log('Popup: Generated weekly story:', story);
+    } catch (error) {
+      console.error('Popup: Error generating weekly story:', error);
+    }
+  };
+
+  const viewStories = async () => {
+    try {
+      const storiesList = await sendMessage('GET_STORIES');
+      setStories(storiesList);
+      console.log('Popup: Loaded stories:', storiesList);
+    } catch (error) {
+      console.error('Popup: Error loading stories:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="popup-container">
@@ -257,7 +290,7 @@ const Popup: React.FC<PopupProps> = () => {
         )}
         {/* TEMP: Test Analytics Button */}
         <div style={{ marginTop: 24, textAlign: 'center' }}>
-          <button onClick={testAnalytics} style={{ padding: '8px 16px', borderRadius: 6, background: '#667eea', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer' }}>
+          <button onClick={testAnalytics} style={{ padding: '8px 16px', borderRadius: 6, background: '#667eea', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer', margin: '4px' }}>
             Test Analytics
           </button>
           {analyticsSummary && (
@@ -278,6 +311,50 @@ const Popup: React.FC<PopupProps> = () => {
             </pre>
           )}
         </div>
+
+        {/* Story Generation Buttons */}
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <button onClick={generateDailyStory} style={{ padding: '8px 16px', borderRadius: 6, background: '#FF9800', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer', margin: '4px' }}>
+            Generate Daily Story
+          </button>
+          <button onClick={generateWeeklyStory} style={{ padding: '8px 16px', borderRadius: 6, background: '#9C27B0', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer', margin: '4px' }}>
+            Generate Weekly Story
+          </button>
+          <button onClick={viewStories} style={{ padding: '8px 16px', borderRadius: 6, background: '#2196F3', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer', margin: '4px' }}>
+            View Stories
+          </button>
+        </div>
+
+        {/* Current Story Display */}
+        {currentStory && (
+          <div style={{ marginTop: 16, padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #e9ecef' }}>
+            <h3 style={{ margin: '0 0 8px 0', color: '#495057' }}>{currentStory.title}</h3>
+            <p style={{ margin: '0 0 8px 0', fontSize: '14px', lineHeight: '1.5', color: '#6c757d' }}>
+              {currentStory.content}
+            </p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#adb5bd', fontStyle: 'italic' }}>
+              {currentStory.summary}
+            </p>
+          </div>
+        )}
+
+        {/* Stories List */}
+        {stories.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <h3 style={{ margin: '0 0 8px 0', color: '#495057' }}>Your Stories</h3>
+            {stories.slice(0, 3).map((story, index) => (
+              <div key={index} style={{ marginBottom: 12, padding: 12, background: '#fff', borderRadius: 6, border: '1px solid #dee2e6' }}>
+                <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#495057' }}>{story.title}</h4>
+                <p style={{ margin: '0 0 4px 0', fontSize: '12px', lineHeight: '1.4', color: '#6c757d' }}>
+                  {story.content.substring(0, 100)}...
+                </p>
+                <p style={{ margin: 0, fontSize: '10px', color: '#adb5bd' }}>
+                  {story.date} • {story.type}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
