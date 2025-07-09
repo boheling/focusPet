@@ -2,7 +2,7 @@
 
 ## Overview
 
-focusPet is a Chrome browser extension that provides a delightful virtual pet overlay to help users stay focused and productive. The extension combines gamification elements with practical productivity features like reminders and focus tracking.
+focusPet is a Chrome browser extension that provides a delightful virtual pet overlay to help users stay focused and productive. The extension combines gamification elements with practical productivity features like reminders and focus tracking, with robust error handling and graceful degradation.
 
 ## System Architecture
 
@@ -24,9 +24,10 @@ focusPet/
 │   │   └── options.html # Options HTML template
 │   ├── shared/          # Shared utilities and types
 │   │   ├── types/       # TypeScript type definitions
-│   │   ├── storage/     # Storage management
+│   │   ├── storage/     # Storage management with error handling
 │   │   ├── pet/         # Pet behavior engine
-│   │   └── reminders/   # Reminder system
+│   │   ├── reminders/   # Reminder system
+│   │   └── analytics/   # Focus tracking and analytics
 │   └── assets/          # Source images and icons
 ├── public/              # Static assets, manifest, HTML
 ├── dist/                # Built extension files
@@ -47,6 +48,7 @@ focusPet/
 - Responsive design with automatic canvas resizing
 - Persistence across page navigations
 - Real-time sync with background service worker
+- Graceful error handling for storage failures
 
 **Responsibilities**:
 - Initialize pet overlay on page load
@@ -56,6 +58,7 @@ focusPet/
 - Manage pet positioning
 - Handle canvas resizing on window resize
 - Listen for sync messages from background
+- Handle storage errors gracefully
 
 **Technical Implementation**:
 ```typescript
@@ -96,16 +99,17 @@ class PetOverlay {
 
 ### 2. Background Service Worker (`src/background/service-worker.ts`)
 
-**Purpose**: Manages background tasks, alarms, focus tracking, and cross-tab communication.
+**Purpose**: Manages background tasks, alarms, focus tracking, and cross-tab communication with robust error handling.
 
 **Key Features**:
 - Reminder scheduling and triggering
 - Focus time tracking with treat rewards
 - Cross-tab state synchronization
 - Browser notification management
-- Storage initialization
+- Storage initialization with error handling
 - Message passing between components
 - Real-time treat reward system
+- Context validity monitoring
 
 **Responsibilities**:
 - Handle Chrome alarms API
@@ -115,79 +119,384 @@ class PetOverlay {
 - Handle message passing
 - Initialize default storage values
 - Send sync messages to all tabs
+- Monitor extension context validity
+- Handle storage failures gracefully
 
 **Technical Implementation**:
 ```typescript
-// Storage initialization
-chrome.runtime.onInstalled.addListener(async () => {
-  await storageManager.initializeDefaults();
+// Storage initialization with error handling
+chrome.runtime.onInstalled.addListener(async (details) => {
+  try {
+    console.log('focusPet: Service worker installed:', details.reason);
+    await storageManager.initializeDefaults();
+    
+    // Request notification permission for system-level notifications
+    try {
+      const permission = await chrome.permissions.request({
+        permissions: ['notifications']
+      });
+      if (permission) {
+        console.log('focusPet: Notification permission granted');
+      } else {
+        console.log('focusPet: Notification permission denied - reminders will only show in browser');
+      }
+    } catch (error) {
+      console.log('focusPet: Notification permission already granted or not available');
+    }
+    console.log('focusPet: Installation initialization complete');
+  } catch (error) {
+    console.error('focusPet: Error during installation initialization:', error);
+  }
 });
 
-// Focus tracking with treat rewards
+// Focus tracking with treat rewards and error handling
 async function trackFocusTime(): Promise<void> {
-  const focusStats = await storageManager.getFocusStats();
-  if (focusStats) {
-    focusStats.totalFocusTime += 1; // 1 minute
-    
-    // Check for treat rewards using timestamp-based tracking
-    const settings = await storageManager.getUserSettings();
-    if (settings?.focusTracking?.treatRewardInterval) {
-      const now = Date.now();
-      const intervalMs = settings.focusTracking.treatRewardInterval * 60 * 1000;
-      if (now - focusStats.lastTreatTime >= intervalMs) {
-        // Award treat and sync to all tabs
-        const petState = await storageManager.getPetState();
-        if (petState) {
-          petState.treats += 1;
-          await storageManager.setPetState(petState);
-          
-          // Send sync message to all tabs
-          const tabs = await chrome.tabs.query({});
-          tabs.forEach(tab => {
-            if (tab.id) {
-              chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' });
+  try {
+    const focusStats = await storageManager.getFocusStats();
+    if (focusStats) {
+      focusStats.totalFocusTime += 1; // 1 minute
+      
+      // Check for treat rewards using timestamp-based tracking
+      const settings = await storageManager.getUserSettings();
+      if (settings?.focusTracking?.treatRewardInterval) {
+        const now = Date.now();
+        const intervalMs = settings.focusTracking.treatRewardInterval * 60 * 1000;
+        if (now - focusStats.lastTreatTime >= intervalMs) {
+          // Award treat and sync to all tabs
+          const petState = await storageManager.getPetState();
+          if (petState) {
+            petState.treats += 1;
+            await storageManager.setPetState(petState);
+            
+            // Send sync message to all tabs
+            const tabs = await chrome.tabs.query({});
+            tabs.forEach(tab => {
+              if (tab.id) {
+                chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' }).catch(() => {
+                  // Ignore errors for tabs that don't have content script
+                });
+              }
+            });
+            
+            // Show notification
+            try {
+              await chrome.notifications.create(`treat_${Date.now()}`, {
+                type: 'basic',
+                iconUrl: 'assets/icons/icon48.png',
+                title: 'focusPet Treat Earned!',
+                message: 'Great job staying focused! Your pet earned a treat.',
+                priority: 1
+              });
+            } catch (notificationError) {
+              console.log('focusPet: Could not create notification:', notificationError);
             }
-          });
-          
-          // Show notification
-          await chrome.notifications.create(`treat_${Date.now()}`, {
-            type: 'basic',
-            iconUrl: 'assets/icons/icon48.png',
-            title: 'focusPet Treat Earned!',
-            message: 'Great job staying focused! Your pet earned a treat.',
-            priority: 1
-          });
-          
-          focusStats.lastTreatTime = now;
+            
+            focusStats.lastTreatTime = now;
+          }
         }
       }
+      await storageManager.setFocusStats(focusStats);
     }
-    await storageManager.setFocusStats(focusStats);
+  } catch (error) {
+    console.error('focusPet: Error tracking focus time:', error);
   }
 }
 
-// Periodic focus tracking
+// Periodic focus tracking with error handling
 setInterval(async () => {
-  const settings = await storageManager.getUserSettings();
-  if (settings?.focusTracking?.enabled) {
-    await trackFocusTime();
+  try {
+    const settings = await storageManager.getUserSettings();
+    if (settings?.focusTracking?.enabled) {
+      await trackFocusTime();
+    }
+  } catch (error) {
+    console.error('focusPet: Error in focus tracking:', error);
   }
 }, 60000); // Check every minute
 
-// Alarm handling
+// Alarm handling with error handling
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name.startsWith('reminder_')) {
-    await reminderManager.handleAlarmTrigger(alarm.name);
+  try {
+    console.log('focusPet: Alarm triggered:', alarm.name);
+    if (alarm.name.startsWith('reminder_')) {
+      await reminderManager.handleAlarmTrigger(alarm.name);
+    }
+  } catch (error) {
+    console.error('focusPet: Error handling alarm:', error);
   }
 });
 
-// Message handling
+// Message handling with error handling
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Handle various message types: GET_PET_STATE, CREATE_REMINDER, etc.
+  try {
+    handleMessage(message, sender, sendResponse);
+  } catch (error) {
+    console.error('focusPet: Error handling message:', error);
+    sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
+  return true; // Keep message channel open for async response
 });
 ```
 
-### 3. Popup UI (`src/popup/popup.tsx`)
+### 3. Storage Management (`src/shared/storage/index.ts`)
+
+**Purpose**: Provides robust data persistence with comprehensive error handling and context validity monitoring.
+
+**Key Features**:
+- Context validity tracking
+- Automatic context restoration
+- Graceful degradation on storage failures
+- Comprehensive error logging
+- Local state persistence
+- Cross-tab synchronization
+- Type-safe operations
+
+**Technical Implementation**:
+```typescript
+export class StorageManager {
+  private static instance: StorageManager;
+  private contextValid: boolean = true;
+  private contextCheckTimer: number | null = null;
+
+  private constructor() {
+    this.startContextCheck();
+  }
+
+  // Check if extension context is valid
+  isContextValid(): boolean {
+    return this.contextValid;
+  }
+
+  // Reset context validity (useful for testing or recovery)
+  resetContext(): void {
+    this.contextValid = true;
+  }
+
+  // Generic storage methods with error handling
+  async get<T>(key: string): Promise<T | null> {
+    if (!this.contextValid) {
+      console.log('Storage get operation skipped - context invalid');
+      return null;
+    }
+    
+    try {
+      const result = await chrome.storage.local.get(key);
+      return result[key] || null;
+    } catch (error) {
+      console.error(`Error getting storage key ${key}:`, error);
+      // If extension context is invalidated, mark context as invalid and return null
+      if (error instanceof Error && error.message?.includes('Extension context invalidated')) {
+        console.log('Extension context invalidated during get operation');
+        this.contextValid = false;
+        return null;
+      }
+      // For other errors, return null to prevent crashes
+      console.log('Storage get operation failed, returning null');
+      return null;
+    }
+  }
+
+  async set<T>(key: string, value: T): Promise<void> {
+    if (!this.contextValid) {
+      console.log('Storage operation skipped - context invalid');
+      return;
+    }
+    
+    try {
+      await chrome.storage.local.set({ [key]: value });
+    } catch (error) {
+      console.error(`Error setting storage key ${key}:`, error);
+      // If extension context is invalidated, mark context as invalid
+      if (error instanceof Error && error.message?.includes('Extension context invalidated')) {
+        console.log('Extension context invalidated, marking as invalid');
+        this.contextValid = false;
+        return;
+      }
+      // For other errors, don't throw to prevent crashes
+      console.log('Storage operation failed, continuing without persistence');
+    }
+  }
+
+  // Start periodic context validity check
+  private startContextCheck(): void {
+    this.contextCheckTimer = window.setInterval(() => {
+      if (!this.contextValid) {
+        this.checkContextValidity();
+      }
+    }, 60000); // Check every minute
+  }
+
+  // Check if context can be restored
+  private async checkContextValidity(): Promise<void> {
+    try {
+      // Try a simple storage operation
+      await chrome.storage.local.get('test');
+      this.contextValid = true;
+      console.log('focusPet: Extension context restored');
+    } catch (error) {
+      // Context is still invalid
+      console.log('focusPet: Extension context still invalid');
+    }
+  }
+
+  // Cleanup method
+  destroy(): void {
+    if (this.contextCheckTimer) {
+      clearInterval(this.contextCheckTimer);
+      this.contextCheckTimer = null;
+    }
+  }
+}
+```
+
+### 4. Pet Engine (`src/shared/pet/pet-engine.ts`)
+
+**Purpose**: Manages pet behavior, animations, and state with robust error handling.
+
+**Key Features**:
+- Mood-based behavior system
+- Animation state management
+- Energy and satiety systems
+- Speech bubble communication
+- Context-aware error handling
+- Local state persistence
+- Real-time behavior updates
+
+**Technical Implementation**:
+```typescript
+export class PetEngine {
+  private petState: PetState;
+  private animationTimer: number | null = null;
+  private behaviorTimer: number | null = null;
+  private mousePosition: Position = { x: 0, y: 0 };
+  private lastSpeechTime: number = 0;
+  private speechCooldown: number = 10000; // 10 seconds between speeches
+
+  constructor(initialPetState: PetState) {
+    this.petState = initialPetState;
+    this.startBehaviorLoop();
+  }
+
+  // Update pet state with error handling
+  async updatePetState(updates: Partial<PetState>): Promise<void> {
+    this.petState = { ...this.petState, ...updates };
+    
+    // Only attempt storage if context is valid
+    if (storageManager.isContextValid()) {
+      try {
+        await storageManager.setPetState(this.petState);
+      } catch (error) {
+        // Continue with local state update even if storage fails
+        console.log('focusPet: Storage update failed, continuing with local state');
+      }
+    } else {
+      console.log('focusPet: Storage context invalid, skipping persistence');
+    }
+    
+    this.updateMood();
+  }
+
+  // Pet interactions with error handling
+  async interactWithPet(): Promise<void> {
+    this.petState.happiness = Math.min(100, this.petState.happiness + 10);
+    this.petState.lastInteraction = Date.now();
+    
+    // Wake up the pet if it was napping
+    if (this.petState.currentAnimation === 'nap') {
+      this.setAnimation('excited'); // Wake up excited
+      this.speak('wake');
+    } else {
+      // Random animation on interaction
+      const animations: PetAnimation[] = ['excited', 'play'];
+      const randomAnimation = animations[Math.floor(Math.random() * animations.length)];
+      this.setAnimation(randomAnimation);
+      this.speak('pet');
+    }
+    
+    try {
+      await this.updatePetState({
+        happiness: this.petState.happiness,
+        lastInteraction: this.petState.lastInteraction
+      });
+    } catch (error) {
+      // Silent error handling - local state is already updated
+      console.log('focusPet: Interaction storage update failed, continuing with local state');
+    }
+
+    // Reset to idle after interaction
+    setTimeout(() => {
+      this.setAnimation('idle');
+    }, 2000);
+  }
+
+  // Behavior loop with error handling
+  private async updatePetBehavior(): Promise<void> {
+    const now = Date.now();
+    const timeSinceInteraction = now - this.petState.lastInteraction;
+
+    // Decrease happiness over time if not interacted with
+    if (timeSinceInteraction > 300000) { // 5 minutes
+      this.petState.happiness = Math.max(0, this.petState.happiness - 2);
+    }
+
+    // Nap after 2 minutes of inactivity
+    if (timeSinceInteraction > 120000) { // 2 minutes
+      if (this.petState.currentAnimation !== 'nap') {
+        console.log(`focusPet: Pet inactive for ${Math.floor(timeSinceInteraction / 1000)}s, setting to nap`);
+        this.setAnimation('nap');
+        this.speak('nap');
+      }
+      // Energy restoration while napping
+      const idleMinutes = Math.floor(timeSinceInteraction / 60000);
+      const energyGain = Math.min(3, idleMinutes); // Max 3 energy per 30-second cycle
+      this.petState.energy = Math.min(100, this.petState.energy + energyGain);
+    } else {
+      // Decrease energy if recently interacted with (pet is active)
+      this.petState.energy = Math.max(0, this.petState.energy - 1);
+      // Return to idle if was napping but now active
+      if (this.petState.currentAnimation === 'nap') {
+        this.setAnimation('idle');
+      }
+      // Random behaviors (sit/play) if not napping
+      if (Math.random() < 0.3 && this.petState.currentAnimation !== 'nap') {
+        this.performRandomBehavior();
+      }
+    }
+
+    // Decrease satiety over time (pet gets hungry)
+    this.petState.satiety = Math.max(0, this.petState.satiety - 1);
+
+    // Update mood based on stats
+    this.updateMood();
+
+    try {
+      await this.updatePetState({
+        happiness: this.petState.happiness,
+        energy: this.petState.energy,
+        satiety: this.petState.satiety,
+        mood: this.petState.mood
+      });
+    } catch (error) {
+      // Silent error handling - local state is already updated
+      console.log('focusPet: Behavior update storage failed, continuing with local state');
+    }
+  }
+
+  // Cleanup with storage manager cleanup
+  destroy(): void {
+    if (this.animationTimer) {
+      clearInterval(this.animationTimer);
+    }
+    if (this.behaviorTimer) {
+      clearInterval(this.behaviorTimer);
+    }
+    // Cleanup storage manager
+    storageManager.destroy();
+  }
+}
+```
+
+### 5. Popup UI (`src/popup/popup.tsx`)
 
 **Purpose**: Provides the main user interface for interacting with the extension.
 
@@ -198,318 +507,296 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 - Reminder creation and management
 - Real-time sync with background service worker
 - Message listener for immediate updates
-
-**Responsibilities**:
-- Display pet state and stats
-- Allow pet feeding and interaction
-- Manage reminder creation and settings
-- Handle settings configuration
-- Sync with background service worker
-- Provide immediate feedback for user actions
+- Error handling for storage operations
 
 **Technical Implementation**:
 ```typescript
-const Popup: React.FC<PopupProps> = () => {
-  const [petState, setPetState] = useState<PetState | null>(null);
-  const [settings, setSettings] = useState<UserSettings | null>(null);
-  
-  // Real-time message listener
-  useEffect(() => {
-    if (isExtension) {
-      const handleMessage = (message: any) => {
-        if (message.type === 'SYNC_PET_STATE') {
-          loadData(); // Refresh data immediately
-        }
-      };
-      
-      chrome.runtime.onMessage.addListener(handleMessage);
-      return () => chrome.runtime.onMessage.removeListener(handleMessage);
+// Message listener for real-time updates
+useEffect(() => {
+  const handleMessage = (message: any) => {
+    if (message.type === 'SYNC_PET_STATE') {
+      // Reload pet state from storage
+      loadPetState();
     }
-  }, [isExtension, loadData]);
-  
-  // Settings management with real-time sync
-  const saveSettings = async () => {
-    await sendMessage('UPDATE_USER_SETTINGS', { data: updatedSettings });
-    setSettings(updatedSettings);
   };
-  
-  // Pet interaction
-  const feedPet = async () => {
-    await sendMessage('FEED_PET');
-    await loadData(); // Refresh data
-  };
-}
-```
 
-### 4. Pet Engine (`src/shared/pet/pet-engine.ts`)
+  chrome.runtime.onMessage.addListener(handleMessage);
+  return () => chrome.runtime.onMessage.removeListener(handleMessage);
+}, []);
 
-**Purpose**: Manages pet behavior, animations, and state transitions.
-
-**Key Features**:
-- Pet state management with persistence
-- Behavior simulation
-- Animation control
-- Interaction responses
-- Mood calculation based on stats
-- Treat system and rewards
-- Natural energy restoration system
-
-**Responsibilities**:
-- Update pet stats over time
-- Handle user interactions
-- Manage pet animations
-- Calculate mood based on stats
-- Trigger random behaviors
-- Handle treat feeding and rewards
-- Manage natural energy restoration during idle time
-
-**Technical Implementation**:
-```typescript
-class PetEngine {
-  private petState: PetState;
-  private behaviorTimer: number;
-  
-  // Behavior loop every 30 seconds
-  // Mood calculation based on happiness, energy, hunger
-  // Random behavior generation
-  // Interaction response handling
-  // Treat system management
-  // Natural energy restoration based on idle time
-  // Nap animation when resting and gaining energy
-}
-```
-
-### Pet Idle and Nap Logic
-- The pet engine tracks the time since last user interaction.
-- After 2 minutes of inactivity, the pet switches to the 'nap' animation.
-- The 'sit' animation is now only triggered as a random behavior, not by inactivity.
-- Any user interaction (mouse move/click) wakes the pet up and returns it to idle.
-- For best results, sit and nap images should be transparent PNGs.
-- This logic is implemented in the `updatePetBehavior` method of the pet engine.
-
-### 5. Reminder Manager (`src/shared/reminders/reminder-manager.ts`)
-
-**Purpose**: Handles reminder creation, scheduling, and triggering.
-
-**Key Features**:
-- Reminder CRUD operations
-- Alarm scheduling with Chrome alarms API
-- Preset reminder types (Pomodoro, posture, water, eye rest)
-- Recurring reminder support
-- Notification management
-- Cross-tab reminder triggering
-
-**Responsibilities**:
-- Create and manage reminders
-- Schedule Chrome alarms
-- Handle reminder triggers
-- Update recurring reminders
-- Send notifications
-- Manage preset reminder types
-
-**Technical Implementation**:
-```typescript
-class ReminderManager {
-  private reminders: Reminder[];
-  private alarmIds: Set<string>;
-  
-  // Chrome alarms integration
-  // Reminder persistence
-  // Trigger handling
-  // Preset reminder creation
-  // Cross-tab notification
-}
-```
-
-### 6. Storage Manager (`src/shared/storage/index.ts`)
-
-**Purpose**: Manages persistent data storage and cross-tab synchronization.
-
-**Key Features**:
-- Chrome storage API integration
-- Type-safe storage operations
-- Default data initialization
-- Cross-tab synchronization
-- Error handling for extension context invalidation
-- Focus stats with treat tracking
-
-**Responsibilities**:
-- Initialize default pet state and settings
-- Handle storage operations with error recovery
-- Manage focus statistics and treat tracking
-- Provide type-safe storage access
-- Handle extension context invalidation gracefully
-
-**Technical Implementation**:
-```typescript
-class StorageManager {
-  private static instance: StorageManager;
-  
-  // Singleton pattern for consistent access
-  static getInstance(): StorageManager {
-    if (!StorageManager.instance) {
-      StorageManager.instance = new StorageManager();
+// Error handling for storage operations
+const loadPetState = async () => {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'GET_PET_STATE' });
+    if (response.success) {
+      setPetState(response.data);
+    } else {
+      console.error('Failed to load pet state:', response.error);
     }
-    return StorageManager.instance;
+  } catch (error) {
+    console.error('Error loading pet state:', error);
+  }
+};
+
+// Settings management with error handling
+const saveSettings = async (newSettings: UserSettings) => {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'UPDATE_USER_SETTINGS',
+      data: newSettings
+    });
+    if (response.success) {
+      setSettings(newSettings);
+    } else {
+      console.error('Failed to save settings:', response.error);
+    }
+  } catch (error) {
+    console.error('Error saving settings:', error);
+  }
+};
+```
+
+## Error Handling Architecture
+
+### 1. Extension Context Invalidation
+
+**Problem**: Chrome extensions can have their context invalidated during updates, reloads, or other system events, causing storage operations to fail.
+
+**Solution**: 
+- Monitor context validity state
+- Skip storage operations when context is invalid
+- Continue with local state updates
+- Automatically restore context when possible
+
+**Implementation**:
+```typescript
+// In StorageManager
+private contextValid: boolean = true;
+
+async set<T>(key: string, value: T): Promise<void> {
+  if (!this.contextValid) {
+    console.log('Storage operation skipped - context invalid');
+    return;
   }
   
-  // Initialize default data with treat tracking
-  async initializeDefaults(): Promise<void> {
-    const focusStats = await this.getFocusStats();
-    if (!focusStats) {
-      const defaultStats: FocusStats = {
-        totalFocusTime: 0,
-        currentStreak: 0,
-        longestStreak: 0,
-        treatsEarned: 0,
-        achievements: [],
-        lastTreatTime: 0, // Track last treat reward time
-      };
-      await this.setFocusStats(defaultStats);
+  try {
+    await chrome.storage.local.set({ [key]: value });
+  } catch (error) {
+    if (error instanceof Error && error.message?.includes('Extension context invalidated')) {
+      this.contextValid = false;
+      return;
     }
   }
+}
+```
+
+### 2. Graceful Degradation
+
+**Problem**: When storage fails, the extension should continue to function with local state.
+
+**Solution**:
+- Always update local state first
+- Attempt storage operations second
+- Continue functionality even if storage fails
+- Provide clear error messages for debugging
+
+**Implementation**:
+```typescript
+// In PetEngine
+async updatePetState(updates: Partial<PetState>): Promise<void> {
+  this.petState = { ...this.petState, ...updates };
   
-  // Error handling for extension context invalidation
-  async get<T>(key: string): Promise<T | null> {
+  if (storageManager.isContextValid()) {
     try {
-      const result = await chrome.storage.local.get(key);
-      return result[key] || null;
+      await storageManager.setPetState(this.petState);
     } catch (error) {
-      if (error instanceof Error && error.message?.includes('Extension context invalidated')) {
-        console.log('Extension context invalidated during get operation');
-        return null;
-      }
-      return null;
+      console.log('focusPet: Storage update failed, continuing with local state');
     }
+  } else {
+    console.log('focusPet: Storage context invalid, skipping persistence');
+  }
+  
+  this.updateMood();
+}
+```
+
+### 3. Automatic Recovery
+
+**Problem**: When the extension context is restored, storage operations should resume automatically.
+
+**Solution**:
+- Periodically check context validity
+- Restore context state when possible
+- Resume normal operations automatically
+- Provide user feedback about recovery
+
+**Implementation**:
+```typescript
+// In StorageManager
+private startContextCheck(): void {
+  this.contextCheckTimer = window.setInterval(() => {
+    if (!this.contextValid) {
+      this.checkContextValidity();
+    }
+  }, 60000); // Check every minute
+}
+
+private async checkContextValidity(): Promise<void> {
+  try {
+    await chrome.storage.local.get('test');
+    this.contextValid = true;
+    console.log('focusPet: Extension context restored');
+  } catch (error) {
+    console.log('focusPet: Extension context still invalid');
   }
 }
 ```
 
 ## Data Flow
 
-### 1. Focus Tracking Flow
+### 1. User Interaction Flow
+
 ```
-Background Service Worker (every minute)
-    ↓
-Check if focus tracking is enabled
-    ↓
-Increment total focus time
-    ↓
-Check if treat reward interval has passed
-    ↓
-Award treat and update pet state
-    ↓
-Send SYNC_PET_STATE message to all tabs
-    ↓
-Popup and overlay update immediately
+User clicks pet → PetEngine.interactWithPet() → 
+Update local state → Attempt storage → 
+Send sync message → All tabs update
 ```
 
-### 2. Settings Update Flow
+### 2. Reminder Flow
+
 ```
-Popup UI (user changes settings)
-    ↓
-Send UPDATE_USER_SETTINGS message to background
-    ↓
-Background saves settings to storage
-    ↓
-Send response back to popup
-    ↓
-Popup updates local state
-    ↓
-Settings persist across browser sessions
+Reminder trigger → Service worker → 
+Send message to active tab → 
+Pet animation + speech bubble → 
+User interaction
 ```
 
-### 3. Treat Reward Flow
+### 3. Focus Tracking Flow
+
 ```
-Background Service Worker (treat earned)
-    ↓
-Update pet state with new treat
-    ↓
-Update focus stats with lastTreatTime
-    ↓
-Send SYNC_PET_STATE message to all tabs
-    ↓
-Show desktop notification
-    ↓
-Popup and overlay refresh data
-    ↓
-User sees updated treat count immediately
+Background timer → Check focus time → 
+Award treats if interval met → 
+Update pet state → Sync to all tabs
 ```
 
-## Key Technical Decisions
+### 4. Error Recovery Flow
 
-### 1. Timestamp-based Treat Tracking
-- **Problem**: Previous modulo-based tracking could award multiple treats per interval
-- **Solution**: Use `lastTreatTime` timestamp to ensure exactly one treat per interval
-- **Implementation**: `now - focusStats.lastTreatTime >= intervalMs`
-
-### 2. Real-time Cross-tab Sync
-- **Problem**: Popup and overlay could show stale data
-- **Solution**: Chrome extension messaging system for immediate updates
-- **Implementation**: `SYNC_PET_STATE` messages sent to all tabs
-
-### 3. React State Management
-- **Problem**: Popup could miss updates from background
-- **Solution**: Message listener with `useCallback` for proper cleanup
-- **Implementation**: `chrome.runtime.onMessage.addListener` in useEffect
-
-### 4. Error Handling for Extension Context
-- **Problem**: Extension context invalidation during development
-- **Solution**: Graceful error handling with fallback behavior
-- **Implementation**: Try-catch blocks with context invalidation detection
+```
+Storage error → Mark context invalid → 
+Continue with local state → 
+Periodic context check → 
+Restore when possible
+```
 
 ## Performance Considerations
 
-### 1. Canvas Rendering
-- 60fps rendering loop with requestAnimationFrame
-- Automatic canvas resizing on window resize
-- Efficient sprite-based animation system
+### 1. Rendering Performance
+- Canvas rendering at 60fps
+- Efficient sprite loading and caching
+- Minimal DOM manipulation
+- Hardware acceleration usage
 
-### 2. Background Processing
-- Focus tracking runs every minute (not continuously)
-- Treat rewards use efficient timestamp comparison
-- Storage operations are async and non-blocking
+### 2. Memory Management
+- Proper cleanup of timers and intervals
+- Efficient storage operations
+- Minimal object creation
+- Weak references where appropriate
 
-### 3. Memory Management
-- Proper cleanup of event listeners
-- Singleton pattern for storage manager
-- React useEffect cleanup for message listeners
+### 3. Battery Optimization
+- Support for reduced motion preferences
+- Efficient animation loops
+- Minimal background processing
+- Smart focus tracking intervals
+
+### 4. Error Recovery Performance
+- Minimal impact on user experience during errors
+- Efficient context checking
+- Graceful degradation without performance loss
+- Automatic recovery with minimal overhead
 
 ## Security Considerations
 
-### 1. Content Script Isolation
-- Pet overlay runs in isolated context
-- No access to page content or scripts
-- Safe mouse event handling
+### 1. Content Script Security
+- Minimal DOM access
+- Secure message passing
+- No direct script injection
+- Sandboxed execution
 
 ### 2. Storage Security
-- Chrome storage API provides secure data persistence
-- No sensitive data stored (only pet state and settings)
-- Extension context validation
+- Local storage only
+- No sensitive data collection
+- Secure data validation
+- Type-safe operations
+- Robust error handling
 
-### 3. Message Passing
-- Type-safe message handling
-- Error handling for invalid messages
-- Secure cross-tab communication
+### 3. Permission Security
+- Minimal required permissions
+- Clear permission usage
+- Secure API access
+- Proper error handling
+
+## Testing Strategy
+
+### 1. Unit Testing
+- Pet engine behavior
+- Storage operations
+- Reminder system
+- Error handling
+
+### 2. Integration Testing
+- Message passing between components
+- Cross-tab synchronization
+- Storage persistence
+- Error recovery
+
+### 3. End-to-End Testing
+- Complete user workflows
+- Extension loading and unloading
+- Context invalidation scenarios
+- Performance under load
+
+## Deployment Considerations
+
+### 1. Build Process
+- TypeScript compilation
+- Asset optimization
+- Manifest generation
+- Error handling inclusion
+
+### 2. Distribution
+- Chrome Web Store packaging
+- Unpacked extension loading
+- Development vs production builds
+- Version management
+
+### 3. Monitoring
+- Error logging and reporting
+- Performance monitoring
+- User feedback collection
+- Usage analytics
 
 ## Future Enhancements
 
-### 1. Advanced Focus Tracking
-- Website-based focus detection
-- Productivity scoring algorithms
-- Detailed focus analytics
-
-### 2. Enhanced Pet System
+### 1. Advanced Pet Features
 - More pet types and animations
-- Pet evolution and growth
-- Social features between pets
+- Pet customization options
+- Advanced behavior patterns
+- Social features
 
-### 3. Gamification Features
-- Achievement system implementation
-- Streak tracking and rewards
-- Community challenges
+### 2. Enhanced Focus Tracking
+- More detailed analytics
+- Custom focus goals
+- Progress visualization
+- Achievement system
 
-### 4. Performance Optimizations
-- Web Workers for heavy computations
-- Service Worker caching strategies
-- Lazy loading of pet assets 
+### 3. Improved Error Handling
+- More sophisticated recovery mechanisms
+- Better user feedback
+- Advanced logging
+- Performance optimization
+
+### 4. Platform Expansion
+- Firefox extension support
+- Safari extension support
+- Mobile companion app
+- Web dashboard 

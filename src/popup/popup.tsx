@@ -196,6 +196,42 @@ const Popup: React.FC<PopupProps> = () => {
     }
   };
 
+  // Debug analytics status
+  const debugAnalytics = async () => {
+    try {
+      const status = await sendMessage('GET_ANALYTICS_STATUS');
+      setAnalyticsSummary(status);
+      console.log('Popup: Analytics status:', status);
+    } catch (error) {
+      setAnalyticsSummary({ error: error instanceof Error ? error.message : String(error) });
+      console.error('Popup: Error getting analytics status:', error);
+    }
+  };
+
+  // Clear analytics data
+  const clearAnalytics = async () => {
+    try {
+      await sendMessage('CLEAR_ANALYTICS_DATA');
+      console.log('Popup: Analytics data cleared');
+      // Refresh the analytics summary
+      await testAnalytics();
+    } catch (error) {
+      console.error('Popup: Error clearing analytics data:', error);
+    }
+  };
+
+  // Test analytics tracking
+  const testAnalyticsTracking = async () => {
+    try {
+      await sendMessage('TEST_ANALYTICS_TRACKING');
+      console.log('Popup: Test activity logged');
+      // Refresh the analytics summary
+      await testAnalytics();
+    } catch (error) {
+      console.error('Popup: Error testing analytics tracking:', error);
+    }
+  };
+
   // Story generation functions
   const generateDailyStory = async () => {
     try {
@@ -292,6 +328,15 @@ const Popup: React.FC<PopupProps> = () => {
         <div style={{ marginTop: 24, textAlign: 'center' }}>
           <button onClick={testAnalytics} style={{ padding: '8px 16px', borderRadius: 6, background: '#667eea', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer', margin: '4px' }}>
             Test Analytics
+          </button>
+          <button onClick={debugAnalytics} style={{ padding: '8px 16px', borderRadius: 6, background: '#e74c3c', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer', margin: '4px' }}>
+            Debug Analytics
+          </button>
+          <button onClick={clearAnalytics} style={{ padding: '8px 16px', borderRadius: 6, background: '#95a5a6', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer', margin: '4px' }}>
+            Clear Analytics
+          </button>
+          <button onClick={testAnalyticsTracking} style={{ padding: '8px 16px', borderRadius: 6, background: '#27ae60', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer', margin: '4px' }}>
+            Test Analytics Tracking
           </button>
           {analyticsSummary && (
             <pre style={{ 

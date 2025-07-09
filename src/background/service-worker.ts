@@ -2,6 +2,7 @@ import { reminderManager } from '@shared/reminders/reminder-manager';
 import { storageManager } from '@shared/storage';
 import { contentAnalyzer } from '@shared/analytics/content-analyzer';
 import { StoryGenerator } from '@shared/analytics/story-generator';
+import { FocusLevel, ActivityType } from '@shared/analytics/types';
 
 // Initialize content analyzer (browsing activity tracking)
 // This will start tracking as soon as the service worker loads
@@ -236,6 +237,58 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
           sendResponse({ success: true, data: stories });
         } catch (error) {
           console.error('focusPet: Error getting stories:', error);
+          sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+        }
+        break;
+
+      case 'GET_ANALYTICS_STATUS':
+        try {
+          const status = contentAnalyzer.getStatus();
+          const summary = await contentAnalyzer.getActivitySummary(1); // last 1 day
+          sendResponse({ 
+            success: true, 
+            data: { 
+              status, 
+              summary,
+              activityLogLength: contentAnalyzer['activityLog']?.length || 0
+            } 
+          });
+        } catch (error) {
+          console.error('focusPet: Error getting analytics status:', error);
+          sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+        }
+        break;
+
+      case 'CLEAR_ANALYTICS_DATA':
+        try {
+          await contentAnalyzer.clearActivityLog();
+          sendResponse({ success: true });
+        } catch (error) {
+          console.error('focusPet: Error clearing analytics data:', error);
+          sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+        }
+        break;
+
+      case 'TEST_ANALYTICS_TRACKING':
+        try {
+          // Manually log some test activity
+          const testActivity = {
+            domain: 'test.com',
+            pageTitle: '',
+            timeSpent: 5,
+            focusLevel: 'medium' as FocusLevel,
+            activityType: 'work' as ActivityType,
+            timestamp: Date.now()
+          };
+          
+          // Add to activity log directly
+          contentAnalyzer['activityLog'].push(testActivity);
+          await contentAnalyzer['saveActivityLog']();
+          
+          console.log('focusPet: Added test activity to analytics');
+          sendResponse({ success: true, message: 'Test activity logged' });
+        } catch (error) {
+          console.error('focusPet: Error testing analytics tracking:', error);
           sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
         }
         break;

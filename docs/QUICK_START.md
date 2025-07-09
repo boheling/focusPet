@@ -91,6 +91,11 @@ focusPet/
 │   ├── popup/           # Extension popup UI
 │   ├── options/         # Settings page
 │   ├── shared/          # Shared utilities
+│   │   ├── pet/         # Pet behavior engine
+│   │   ├── reminders/   # Reminder system
+│   │   ├── storage/     # Storage management
+│   │   ├── analytics/   # Focus tracking and analytics
+│   │   └── types/       # TypeScript definitions
 │   └── assets/          # Source images and icons
 ├── public/              # Static assets, manifest, HTML
 ├── dist/                # Built extension
@@ -106,13 +111,36 @@ focusPet/
 - `src/popup/popup.tsx` - Extension popup interface
 - `src/shared/pet/pet-engine.ts` - Pet behavior logic
 - `src/shared/reminders/reminder-manager.ts` - Reminder system
-- `src/shared/storage/index.ts` - Data persistence
+- `src/shared/storage/index.ts` - Data persistence with error handling
 
 ### Configuration Files
 - `public/manifest.json` - Extension configuration
 - `vite.config.ts` - Build configuration
 - `tsconfig.json` - TypeScript configuration
 - `package.json` - Dependencies and scripts
+
+## Recent Improvements
+
+### Enhanced Error Handling
+The extension now includes robust error handling for common issues:
+
+- **Extension Context Invalidation**: Automatically handles when the extension context is invalidated (e.g., during updates)
+- **Storage Failures**: Graceful degradation when storage operations fail
+- **Context Restoration**: Automatic recovery when the extension context is restored
+- **Local State Persistence**: Pet continues to function even when storage is unavailable
+
+### Improved Storage System
+- **Context Validity Tracking**: Monitors extension context state
+- **Automatic Recovery**: Periodically checks if context can be restored
+- **Graceful Degradation**: Local state updates continue even when storage fails
+- **Better Error Messages**: Clear logging for debugging storage issues
+
+### Pet Behavior Enhancements
+- **Mood System**: Pets have different moods based on interaction and care
+- **Speech System**: Pets can communicate through speech bubbles
+- **Animation States**: Multiple animation states (idle, walk, sit, nap, play, excited, worried, sad)
+- **Energy System**: Pets have energy that affects their behavior
+- **Satiety System**: Pets get hungry and need feeding
 
 ## Development Workflow
 
@@ -178,6 +206,12 @@ Validate TypeScript types.
 - Check for JavaScript errors in popup console
 - Ensure message passing is working
 
+### Storage Issues
+- Check for "Extension context invalidated" errors in console
+- The extension will continue to work with local state even if storage fails
+- Look for "focusPet: Storage context invalid, skipping persistence" messages
+- Context will automatically restore when possible
+
 ## Debugging Tips
 
 ### 1. Chrome DevTools
@@ -191,6 +225,7 @@ Validate TypeScript types.
 - Service worker logs appear in the extension's service worker console
 - Popup logs appear in the popup's DevTools console
 - Canvas sizing logs: "focusPet: Resizing canvas to [width] x [height]"
+- Storage logs: "focusPet: Storage context invalid, skipping persistence"
 
 ### 3. Extension Reloading
 - Click the refresh icon in `chrome://extensions/`
@@ -208,6 +243,12 @@ chrome.storage.local.get(null, console.log);
 - Look for "focusPet: Content script loading..." message
 - Check for any error messages
 - Verify canvas element exists in DOM
+
+### 6. Error Handling Debugging
+- Look for "focusPet: Extension context invalidated" messages
+- Check for "focusPet: Storage update failed, continuing with local state"
+- Monitor for "focusPet: Extension context restored" messages
+- The pet should continue functioning even with storage errors
 
 ## Adding Features
 
@@ -249,6 +290,12 @@ chrome.storage.local.get(null, console.log);
 - Minimal background processing
 - Smart focus tracking intervals
 
+### 4. Error Recovery
+- Graceful handling of storage failures
+- Automatic context restoration
+- Local state persistence
+- Minimal impact on user experience
+
 ## Security Considerations
 
 ### 1. Content Scripts
@@ -262,6 +309,7 @@ chrome.storage.local.get(null, console.log);
 - No sensitive data collection
 - Secure data validation
 - Type-safe operations
+- Robust error handling
 
 ### 3. Permissions
 - Minimal required permissions
@@ -299,6 +347,13 @@ chrome.storage.local.get(null, console.log);
 - [ ] No JavaScript errors in popup console
 - [ ] Message passing is working
 - [ ] Storage operations are successful
+
+### Storage Issues
+- [ ] Check for "Extension context invalidated" errors
+- [ ] Look for storage error messages in console
+- [ ] Verify local state is working
+- [ ] Check if context restoration is happening
+- [ ] Monitor for automatic recovery messages
 
 ## Next Steps
 

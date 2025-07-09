@@ -407,8 +407,8 @@ export class PetEngine {
       this.petState.happiness = Math.max(0, this.petState.happiness - 2);
     }
 
-    // Nap after 2 minutes of inactivity
-    if (timeSinceInteraction > 120000) { // 2 minutes
+    // Nap after 5 minutes of inactivity
+    if (timeSinceInteraction > 300000) { // 5 minutes
       if (this.petState.currentAnimation !== 'nap') {
         console.log(`focusPet: Pet inactive for ${Math.floor(timeSinceInteraction / 1000)}s, setting to nap`);
         this.setAnimation('nap');

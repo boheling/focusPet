@@ -77,22 +77,37 @@ export class ContentAnalyzer {
   private activityLog: BrowsingActivity[] = [];
   private tabTimers: Map<number, { startTime: number; domain: string }> = new Map();
   private isEnabled: boolean = true;
+  private isInitialized: boolean = false;
+  private periodicTimer: NodeJS.Timeout | null = null;
 
   constructor() {
     this.initialize();
   }
 
   private async initialize(): Promise<void> {
-    // Load settings
-    const settings = await storageManager.getUserSettings();
-    this.isEnabled = settings?.analytics?.enabled ?? true;
-    
-    // Load existing activity log
-    await this.loadActivityLog();
-    
-    // Start tracking
-    if (this.isEnabled) {
-      this.startTracking();
+    try {
+      console.log('focusPet: Initializing content analyzer...');
+      
+      // Load settings
+      const settings = await storageManager.getUserSettings();
+      this.isEnabled = settings?.analytics?.enabled ?? true;
+      
+      console.log('focusPet: Analytics enabled:', this.isEnabled);
+      
+      // Load existing activity log
+      await this.loadActivityLog();
+      
+      // Start tracking if enabled
+      if (this.isEnabled) {
+        this.startTracking();
+      }
+      
+      this.isInitialized = true;
+      console.log('focusPet: Content analyzer initialized successfully');
+    } catch (error) {
+      console.error('focusPet: Error initializing content analyzer:', error);
+      // Continue with basic functionality even if initialization fails
+      this.isEnabled = false;
     }
   }
 
@@ -100,64 +115,96 @@ export class ContentAnalyzer {
     try {
       const stored = await storageManager.getAnalyticsData();
       this.activityLog = stored?.activityLog || [];
+      console.log('focusPet: Loaded', this.activityLog.length, 'activity records');
     } catch (error) {
-      console.log('focusPet: No existing analytics data found');
+      console.log('focusPet: No existing analytics data found, starting fresh');
       this.activityLog = [];
     }
   }
 
   private async saveActivityLog(): Promise<void> {
     try {
-          await storageManager.setAnalyticsData({
-      activityLog: this.activityLog,
-      lastUpdated: Date.now(),
-      dailyStories: [],
-      settings: {
-        enabled: true,
-        trackDomains: true,
-        trackFocusTime: true,
-        trackPetInteractions: true,
-        storyGeneration: true,
-        dataRetentionDays: 7,
-      }
-    });
+      await storageManager.setAnalyticsData({
+        activityLog: this.activityLog,
+        lastUpdated: Date.now(),
+        dailyStories: [],
+        settings: {
+          enabled: true,
+          trackDomains: true,
+          trackFocusTime: true,
+          trackPetInteractions: true,
+          storyGeneration: true,
+          dataRetentionDays: 7,
+        }
+      });
     } catch (error) {
       console.error('focusPet: Failed to save analytics data:', error);
     }
   }
 
   private startTracking(): void {
-    // Track tab updates
-    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-      if (changeInfo.status === 'complete' && tab.url) {
-        this.handleTabUpdate(tabId, tab);
+    try {
+      console.log('focusPet: Starting tab tracking...');
+      
+      // Track tab updates
+      chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+        if (changeInfo.status === 'complete' && tab.url) {
+          this.handleTabUpdate(tabId, tab);
+        }
+      });
+
+      // Track tab activation
+      chrome.tabs.onActivated.addListener((activeInfo) => {
+        this.handleTabActivation(activeInfo.tabId);
+      });
+
+      // Track tab removal
+      chrome.tabs.onRemoved.addListener((tabId) => {
+        this.handleTabRemoval(tabId);
+      });
+
+      // Initialize tracking for existing tabs
+      this.initializeExistingTabs();
+
+      // Periodic activity logging - use setInterval directly, not window.setInterval
+      console.log('focusPet: Setting up periodic timer...');
+      this.periodicTimer = setInterval(() => {
+        console.log('focusPet: Periodic timer fired, calling logCurrentActivity...');
+        this.logCurrentActivity();
+      }, 60000); // Log every minute
+      
+      console.log('focusPet: Tab tracking started successfully, periodic timer ID:', this.periodicTimer);
+    } catch (error) {
+      console.error('focusPet: Error starting tab tracking:', error);
+    }
+  }
+
+  private async initializeExistingTabs(): Promise<void> {
+    try {
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.id && tab.url && this.isValidUrl(tab.url)) {
+          await this.handleTabUpdate(tab.id, tab);
+        }
       }
-    });
-
-    // Track tab activation
-    chrome.tabs.onActivated.addListener((activeInfo) => {
-      this.handleTabActivation(activeInfo.tabId);
-    });
-
-    // Track tab removal
-    chrome.tabs.onRemoved.addListener((tabId) => {
-      this.handleTabRemoval(tabId);
-    });
-
-    // Periodic activity logging
-    setInterval(() => {
-      this.logCurrentActivity();
-    }, 60000); // Log every minute
+      console.log('focusPet: Initialized tracking for existing tabs');
+    } catch (error) {
+      console.error('focusPet: Error initializing existing tabs:', error);
+    }
   }
 
   private async handleTabUpdate(tabId: number, tab: chrome.tabs.Tab): Promise<void> {
-    if (!tab.url || !this.isValidUrl(tab.url)) return;
+    if (!tab.url || !this.isValidUrl(tab.url)) {
+      console.log(`focusPet: Tab ${tabId} has invalid URL: ${tab.url}`);
+      return;
+    }
 
     const domain = this.extractDomain(tab.url);
     const activityType = this.categorizeDomain(domain);
 
     // Check if we already have a timer for this tab
     const existingTimer = this.tabTimers.get(tabId);
+    console.log(`focusPet: Tab ${tabId} update - domain: ${domain}, existing timer:`, existingTimer);
     
     // Only start a new timer if:
     // 1. No existing timer for this tab, OR
@@ -165,90 +212,153 @@ export class ContentAnalyzer {
     if (!existingTimer || existingTimer.domain !== domain) {
       // If domain changed, log the previous activity first
       if (existingTimer && existingTimer.domain !== domain) {
-        const timeSpent = Math.floor((Date.now() - existingTimer.startTime) / 60000); // minutes
-        if (timeSpent > 0) {
-          await this.logActivity(existingTimer.domain, timeSpent);
+        const timeSpent = Math.floor((Date.now() - existingTimer.startTime) / 1000); // seconds
+        const timeInMinutes = Math.ceil(timeSpent / 60);
+        if (timeSpent > 30) {
+          console.log(`focusPet: Domain changed from ${existingTimer.domain} to ${domain}, logging ${timeInMinutes} minutes`);
+          await this.logActivity(existingTimer.domain, timeInMinutes);
         }
       }
       
       // Start new timer for this tab/domain
+      const startTime = Date.now();
       this.tabTimers.set(tabId, {
-        startTime: Date.now(),
+        startTime,
         domain
       });
 
-      console.log(`focusPet: Started tracking tab ${tabId} on ${domain} (${activityType})`);
+      console.log(`focusPet: Started tracking tab ${tabId} on ${domain} (${activityType}) at ${new Date(startTime).toISOString()}`);
+      console.log(`focusPet: Total timers now: ${this.tabTimers.size}`);
+    } else {
+      console.log(`focusPet: Tab ${tabId} same domain (${domain}), continuing existing timer`);
     }
     // If same domain, don't restart the timer - just continue tracking
   }
 
   private async handleTabActivation(tabId: number): Promise<void> {
-    // Update active tab timer
-    const timer = this.tabTimers.get(tabId);
-    if (timer) {
-      timer.startTime = Date.now();
+    try {
+      // Do NOT reset timer here. Only reset after logging activity.
+      // const timer = this.tabTimers.get(tabId);
+      // if (timer) {
+      //   timer.startTime = Date.now();
+      //   console.log(`focusPet: Tab ${tabId} activated, reset timer`);
+      // }
+      // Optionally, log which tab is now active for debugging
+      console.log(`focusPet: Tab ${tabId} activated`);
+    } catch (error) {
+      console.error('focusPet: Error handling tab activation:', error);
     }
   }
 
   private async handleTabRemoval(tabId: number): Promise<void> {
-    // Log final activity for this tab
-    const timer = this.tabTimers.get(tabId);
-    if (timer) {
-      const timeSpent = Math.floor((Date.now() - timer.startTime) / 60000); // minutes
-      if (timeSpent > 0) {
-        await this.logActivity(timer.domain, timeSpent);
+    try {
+      // Log final activity for this tab
+      const timer = this.tabTimers.get(tabId);
+      if (timer) {
+        const timeSpent = Math.floor((Date.now() - timer.startTime) / 1000); // seconds
+        const timeInMinutes = Math.ceil(timeSpent / 60);
+        if (timeSpent > 30) {
+          await this.logActivity(timer.domain, timeInMinutes);
+          console.log(`focusPet: Tab ${tabId} to be removed, logged ${timeInMinutes} minutes`);
+        }
+        this.tabTimers.delete(tabId);
+        console.log(`focusPet: Tab ${tabId} removed`);
       }
-      this.tabTimers.delete(tabId);
+    } catch (error) {
+      console.error('focusPet: Error handling tab removal:', error);
     }
   }
 
   private async logCurrentActivity(): Promise<void> {
     try {
+      const now = Date.now();
+      console.log(`focusPet: logCurrentActivity called at ${new Date(now).toISOString()}, checking active tabs...`);
+      
       const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      console.log('focusPet: Active tabs found:', activeTabs.length);
+      
       if (!activeTabs || activeTabs.length === 0) {
-        // No active window/tab, skip logging
+        console.log('focusPet: No active window/tab, logging final activity for all timers and clearing them');
+        // Log final activity for all active timers since user is away
+        for (const [, timer] of this.tabTimers.entries()) {
+          const timeSpent = Math.ceil((now - timer.startTime) / 1000); // seconds
+          const timeInMinutes = Math.ceil(timeSpent / 60);
+          if (timeSpent > 30) { // At least 30 seconds
+            console.log(`focusPet: User away - logging final activity for ${timer.domain}: ${timeInMinutes} minutes`);
+            await this.logActivity(timer.domain, timeInMinutes);
+          }
+        }
+        // Clear all timers since user is away
+        this.tabTimers.clear();
+        console.log('focusPet: All timers cleared due to user inactivity');
         return;
       }
       
       for (const tab of activeTabs) {
+        console.log(`focusPet: Checking tab ${tab.id}, URL: ${tab.url}`);
+        
         if (tab.id && tab.url && this.isValidUrl(tab.url)) {
           const timer = this.tabTimers.get(tab.id);
+          console.log(`focusPet: Timer for tab ${tab.id}:`, timer);
+          
           if (timer) {
-            const timeSpent = Math.floor((Date.now() - timer.startTime) / 60000); // minutes
-            if (timeSpent >= 1) { // Log if at least 1 minute spent
-              await this.logActivity(timer.domain, timeSpent);
-              timer.startTime = Date.now(); // Reset timer
+            const timeSpent = Math.ceil((now - timer.startTime) / 1000); // 1-s intervals
+          
+            const actualTimeSpentMs = now - timer.startTime;
+            console.log(`focusPet: Current time: ${new Date(now).toISOString()}`);
+            console.log(`focusPet: Timer start time: ${new Date(timer.startTime).toISOString()}`);
+            console.log(`focusPet: Actual time spent (ms): ${actualTimeSpentMs}`);
+            console.log(`focusPet: Time spent on ${timer.domain}: ${timeSpent} seconds`);
+            const timeInMinutes = Math.ceil(timeSpent / 60);
+                         if (timeSpent >= 30) { // Log if at least 30 seconds spent
+               console.log(`focusPet: Logging activity for ${timer.domain} (${timeInMinutes} minutes)`);
+               await this.logActivity(timer.domain, timeInMinutes); // Pass time in minutes
+              timer.startTime = now; // Reset timer to current time
+              console.log(`focusPet: Timer reset for tab ${tab.id} to ${new Date(timer.startTime).toISOString()}`);
+            } else {
+              console.log(`focusPet: Not enough time spent (${timeSpent} seconds), skipping log`);
             }
+          } else {
+            console.log(`focusPet: No timer found for tab ${tab.id}`);
           }
+        } else {
+          console.log(`focusPet: Tab ${tab.id} has invalid URL or no ID`);
         }
       }
+      
+      console.log(`focusPet: Total timers active: ${this.tabTimers.size}`);
+      console.log('focusPet: Timer keys:', Array.from(this.tabTimers.keys()));
     } catch (error) {
       console.warn('focusPet: Could not log activity (no active window/tab).', error);
     }
   }
 
   private async logActivity(domain: string, timeSpent: number): Promise<void> {
-    const activityType = this.categorizeDomain(domain);
-    const focusLevel = this.estimateFocusLevel(activityType);
+    try {
+      const activityType = this.categorizeDomain(domain);
+      const focusLevel = this.estimateFocusLevel(activityType);
 
-    const activity: BrowsingActivity = {
-      domain,
-      pageTitle: '', // We don't store page titles for privacy
-      timeSpent,
-      focusLevel,
-      activityType,
-      timestamp: Date.now()
-    };
+      const activity: BrowsingActivity = {
+        domain,
+        pageTitle: '', // We don't store page titles for privacy
+        timeSpent,
+        focusLevel,
+        activityType,
+        timestamp: Date.now()
+      };
 
-    this.activityLog.push(activity);
-    
-    // Keep only last 7 days of data
-    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    this.activityLog = this.activityLog.filter(activity => activity.timestamp > sevenDaysAgo);
+      this.activityLog.push(activity);
+      
+      // Keep only last 7 days of data
+      const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+      this.activityLog = this.activityLog.filter(activity => activity.timestamp > sevenDaysAgo);
 
-    await this.saveActivityLog();
-    
-    console.log(`focusPet: Logged activity - ${domain} (${activityType}) for ${timeSpent} minutes`);
+      await this.saveActivityLog();
+      
+      console.log(`focusPet: Logged activity - ${domain} (${activityType}) for ${timeSpent} minutes`);
+    } catch (error) {
+      console.error('focusPet: Error logging activity:', error);
+    }
   }
 
   private extractDomain(url: string): string {
@@ -328,7 +438,8 @@ export class ContentAnalyzer {
       const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
       const recentActivities = this.activityLog.filter(activity => activity.timestamp > cutoffTime);
 
-      const totalTime = recentActivities.reduce((sum, activity) => sum + activity.timeSpent, 0);
+      // Convert seconds to minutes for summary
+      const totalTime = recentActivities.reduce((sum, activity) => sum + Math.ceil(activity.timeSpent / 60), 0);
       
       const activityBreakdown: Record<ActivityType, number> = {
         work: 0,
@@ -342,14 +453,23 @@ export class ContentAnalyzer {
       const domainCounts: Record<string, number> = {};
 
       recentActivities.forEach(activity => {
-        activityBreakdown[activity.activityType] += activity.timeSpent;
-        domainCounts[activity.domain] = (domainCounts[activity.domain] || 0) + activity.timeSpent;
+        // Convert seconds to minutes for breakdown
+        const timeInMinutes = Math.ceil(activity.timeSpent / 60);
+        activityBreakdown[activity.activityType] += timeInMinutes;
+        domainCounts[activity.domain] = (domainCounts[activity.domain] || 0) + timeInMinutes;
       });
 
       const topDomains = Object.entries(domainCounts)
         .sort(([,a], [,b]) => b - a)
         .slice(0, 5)
         .map(([domain]) => domain);
+
+      console.log('focusPet: Activity summary generated:', {
+        totalTime,
+        activityBreakdown,
+        topDomains,
+        recentActivitiesCount: recentActivities.length
+      });
 
       return {
         totalTime,
@@ -376,18 +496,35 @@ export class ContentAnalyzer {
   public async clearActivityLog(): Promise<void> {
     this.activityLog = [];
     await this.saveActivityLog();
+    console.log('focusPet: Activity log cleared');
   }
 
   public setEnabled(enabled: boolean): void {
     this.isEnabled = enabled;
-    if (enabled && this.activityLog.length === 0) {
-      this.startTracking();
+    if (enabled && !this.isInitialized) {
+      this.initialize();
     }
+  }
+
+  public getStatus(): { enabled: boolean; initialized: boolean; trackingTabs: number } {
+    return {
+      enabled: this.isEnabled,
+      initialized: this.isInitialized,
+      trackingTabs: this.tabTimers.size
+    };
   }
 
   public destroy(): void {
     // Clear timers
     this.tabTimers.clear();
+    
+    // Clear periodic timer
+    if (this.periodicTimer) {
+      clearInterval(this.periodicTimer);
+      this.periodicTimer = null;
+    }
+    
+    console.log('focusPet: Content analyzer destroyed');
   }
 }
 
