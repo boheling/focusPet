@@ -414,7 +414,35 @@ interface PetTabProps {
   isExtension: boolean;
 }
 
-const PetTab: React.FC<PetTabProps> = ({ petState, onFeedPet }) => {
+const PetTab: React.FC<PetTabProps> = ({ petState, onFeedPet, sendMessage }) => {
+  const showAIInsights = () => {
+    console.log('focusPet: Showing AI Insights');
+    const insights = [
+      `Personality: ${petState.aiPersonality || 'Learning & Adaptive'}`,
+      `Memory Items: ${petState.aiMemory?.favoriteActivities?.length || 0} activities learned`,
+      `User Preferences: ${petState.aiMemory?.userPreferences?.length || 0} preferences stored`,
+      `Learned Behaviors: ${petState.aiMemory?.learnedBehaviors?.length || 0} behaviors`,
+      `Current Mood: ${petState.mood}`,
+      `Happiness: ${petState.happiness}%`,
+      `Energy: ${petState.energy}%`,
+      `Satiety: ${petState.satiety}%`
+    ];
+    
+    alert('🤖 AI Insights:\n\n' + insights.join('\n'));
+  };
+
+  const runPersonalityTest = () => {
+    console.log('focusPet: Running Personality Test');
+    const testQuestions = [
+      'How do you prefer to work?',
+      'What motivates you most?',
+      'How do you handle stress?',
+      'What\'s your ideal break activity?'
+    ];
+    
+    alert('🧠 Personality Test:\n\n' + testQuestions.join('\n') + '\n\n(Feature coming soon!)');
+  };
+
   return (
     <div className="pet-tab">
       <div className="pet-info">
@@ -458,17 +486,30 @@ const PetTab: React.FC<PetTabProps> = ({ petState, onFeedPet }) => {
         </div>
       </div>
 
-      <div className="pet-actions">
-        <button 
-          onClick={onFeedPet}
-          disabled={petState.treats === 0}
-          className="feed-button"
-        >
-          Feed Treat ({petState.treats} left)
-        </button>
-        
+              <div className="pet-actions">
+          <button 
+            onClick={onFeedPet}
+            disabled={petState.treats === 0}
+            className="feed-button"
+          >
+            Feed Treat ({petState.treats} left)
+          </button>
+          
+          <button 
+            onClick={async () => {
+              try {
+                await sendMessage('TRIGGER_AI_RESPONSE');
+                console.log('focusPet: Triggered AI response manually');
+              } catch (error) {
+                console.error('focusPet: Error triggering AI response:', error);
+              }
+            }}
+            className="ai-debug-button"
+          >
+            🤖 Trigger AI Response
+          </button>
 
-      </div>
+        </div>
 
       <div className="pet-animations">
         <h3>Unlocked Animations</h3>
@@ -478,6 +519,32 @@ const PetTab: React.FC<PetTabProps> = ({ petState, onFeedPet }) => {
               {animation}
             </span>
           ))}
+        </div>
+      </div>
+
+      <div className="ai-features">
+        <h3>🤖 AI Features</h3>
+        <div className="ai-status">
+          <div className="ai-item">
+            <span className="ai-label">Personality:</span>
+            <span className="ai-value">Learning & Adaptive</span>
+          </div>
+          <div className="ai-item">
+            <span className="ai-label">Context Awareness:</span>
+            <span className="ai-value">Active</span>
+          </div>
+          <div className="ai-item">
+            <span className="ai-label">Smart Responses:</span>
+            <span className="ai-value">Enabled</span>
+          </div>
+        </div>
+        <div className="ai-actions">
+          <button className="ai-button" onClick={() => showAIInsights()}>
+            View AI Insights
+          </button>
+          <button className="ai-button" onClick={() => runPersonalityTest()}>
+            Personality Test
+          </button>
         </div>
       </div>
     </div>

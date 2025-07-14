@@ -210,6 +210,20 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
         sendResponse({ success: true });
         break;
 
+      case 'TRIGGER_AI_RESPONSE':
+        console.log('focusPet: Service worker received TRIGGER_AI_RESPONSE');
+        // Send message to all tabs to trigger AI response
+        const tabs = await chrome.tabs.query({});
+        tabs.forEach(tab => {
+          if (tab.id) {
+            chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER_AI_RESPONSE' }).catch(() => {
+              // Ignore errors for tabs that don't have content script
+            });
+          }
+        });
+        sendResponse({ success: true });
+        break;
+
       case 'SNOOZE_REMINDER':
         const reminder = reminderManager.getReminders().find(r => r.id === message.reminderId);
         if (reminder) {

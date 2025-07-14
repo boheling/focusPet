@@ -19,6 +19,12 @@ export interface PetState {
   currentAnimation: PetAnimation;
   lastInteraction: number;
   lastSatietyDecrease?: number; // timestamp of last satiety decrease
+  aiPersonality?: string; // AI personality type
+  aiMemory?: {
+    favoriteActivities: string[];
+    userPreferences: string[];
+    learnedBehaviors: string[];
+  };
 }
 
 export interface Position {

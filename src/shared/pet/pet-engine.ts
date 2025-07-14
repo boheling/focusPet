@@ -1,5 +1,6 @@
 import { PetState, PetAnimation, Position } from '../types';
 import { storageManager } from '../storage';
+import { PetAI, AIContext } from '../ai/pet-ai';
 
 // Conversation responses for different pet types and situations
 const PET_RESPONSES = {
@@ -232,10 +233,16 @@ export class PetEngine {
   private mousePosition: Position = { x: 0, y: 0 };
   private lastSpeechTime: number = 0;
   private speechCooldown: number = 10000; // 10 seconds between speeches
+  private petAI: PetAI;
+  private aiResponseTimer: number | null = null;
+  private lastAIResponse: number = 0;
+  private aiResponseInterval: number = 300000; // 5 minutes between AI responses
 
   constructor(initialPetState: PetState) {
     this.petState = initialPetState;
+    this.petAI = new PetAI(initialPetState.type);
     this.startBehaviorLoop();
+    this.startAIResponseLoop();
   }
 
   // Get current pet state
@@ -445,6 +452,12 @@ export class PetEngine {
     }, 30000); // Update every 30 seconds
   }
 
+  private startAIResponseLoop(): void {
+    this.aiResponseTimer = window.setInterval(() => {
+      this.generateAIResponse();
+    }, 300000); // Check for AI responses every 5 minutes
+  }
+
   private async updatePetBehavior(): Promise<void> {
     const now = Date.now();
     const timeSinceInteraction = now - this.petState.lastInteraction;
@@ -563,6 +576,45 @@ export class PetEngine {
       return; // Don't speak too frequently
     }
 
+    // Try AI response first, fall back to old system
+    try {
+      const aiContext: AIContext = {
+        currentTime: now,
+        userActivity: 'working',
+        petStats: {
+          happiness: this.petState.happiness,
+          energy: this.petState.energy,
+          satiety: this.petState.satiety,
+          mood: this.petState.mood
+        },
+        recentInteractions: [],
+        focusTime: 0,
+        treatsEarned: 0,
+        weather: undefined,
+        dayOfWeek: new Date().toLocaleDateString('en-US', { weekday: 'long' })
+      };
+
+      // Generate AI response
+      const aiResponse = this.petAI.generateResponse(aiContext);
+      console.log('focusPet: AI response generated for', context, ':', aiResponse);
+      
+      this.lastSpeechTime = now;
+      this.showSpeechBubble(aiResponse.message);
+      
+      // Animate if the response suggests it
+      if (aiResponse.shouldAnimate) {
+        this.setAnimation('excited');
+        setTimeout(() => {
+          this.setAnimation('idle');
+        }, 3000);
+      }
+      
+      return; // Use AI response, don't fall back to old system
+    } catch (error) {
+      console.error('focusPet: AI response failed, falling back to old system:', error);
+    }
+
+    // Fallback to old system
     const petResponses = PET_RESPONSES[this.petState.type];
     if (!petResponses) return;
 
@@ -571,6 +623,52 @@ export class PetEngine {
       const message = interactionResponses[Math.floor(Math.random() * interactionResponses.length)];
       this.lastSpeechTime = now;
       this.showSpeechBubble(message);
+    }
+  }
+
+  // AI Response Generation
+  public async generateAIResponse(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastAIResponse < this.aiResponseInterval) {
+      return; // Don't generate AI responses too frequently
+    }
+
+    try {
+      // Get current context from content analyzer
+      const context: AIContext = {
+        currentTime: now,
+        userActivity: 'working', // Default, could be enhanced with real activity detection
+        petStats: {
+          happiness: this.petState.happiness,
+          energy: this.petState.energy,
+          satiety: this.petState.satiety,
+          mood: this.petState.mood
+        },
+        recentInteractions: [],
+        focusTime: 0, // Could be enhanced with real focus tracking
+        treatsEarned: 0,
+        weather: undefined,
+        dayOfWeek: new Date().toLocaleDateString('en-US', { weekday: 'long' })
+      };
+
+      const aiResponse = this.petAI.generateResponse(context);
+      
+      // Only show high priority responses or random medium priority
+      if (aiResponse.priority === 'high' || (aiResponse.priority === 'medium' && Math.random() < 0.3)) {
+        console.log('focusPet: AI generated response:', aiResponse);
+        this.lastAIResponse = now;
+        this.showSpeechBubble(aiResponse.message);
+        
+        // Animate if the response suggests it
+        if (aiResponse.shouldAnimate) {
+          this.setAnimation('excited');
+          setTimeout(() => {
+            this.setAnimation('idle');
+          }, 3000);
+        }
+      }
+    } catch (error) {
+      console.error('focusPet: Error generating AI response:', error);
     }
   }
 
@@ -610,6 +708,9 @@ export class PetEngine {
     }
     if (this.behaviorTimer) {
       clearInterval(this.behaviorTimer);
+    }
+    if (this.aiResponseTimer) {
+      clearInterval(this.aiResponseTimer);
     }
   }
 } 

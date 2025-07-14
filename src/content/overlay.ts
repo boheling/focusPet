@@ -118,6 +118,12 @@ class PetOverlay {
           sendResponse({ success: false, error: error.message });
         });
         return true; // Keep message channel open for async response
+      } else if (message.type === 'TRIGGER_AI_RESPONSE') {
+        console.log('focusPet: Overlay received TRIGGER_AI_RESPONSE');
+        if (this.petEngine) {
+          this.petEngine.generateAIResponse();
+        }
+        sendResponse({ success: true });
       }
     });
 
