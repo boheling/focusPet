@@ -193,7 +193,7 @@ export class ContentAnalyzer {
     }
   }
 
-  private async handleTabUpdate(tabId: number, tab: chrome.tabs.Tab): Promise<void> {
+  public async handleTabUpdate(tabId: number, tab: chrome.tabs.Tab): Promise<void> {
     if (!tab.url || !this.isValidUrl(tab.url)) {
       console.log(`focusPet: Tab ${tabId} has invalid URL: ${tab.url}`);
       return;
@@ -235,7 +235,7 @@ export class ContentAnalyzer {
     // If same domain, don't restart the timer - just continue tracking
   }
 
-  private async handleTabActivation(tabId: number): Promise<void> {
+  public async handleTabActivation(tabId: number): Promise<void> {
     try {
       // Do NOT reset timer here. Only reset after logging activity.
       // const timer = this.tabTimers.get(tabId);
@@ -250,7 +250,7 @@ export class ContentAnalyzer {
     }
   }
 
-  private async handleTabRemoval(tabId: number): Promise<void> {
+  public async handleTabRemoval(tabId: number): Promise<void> {
     try {
       // Log final activity for this tab
       const timer = this.tabTimers.get(tabId);
@@ -389,6 +389,7 @@ export class ContentAnalyzer {
     if (domain.includes('microsoft.com') || domain.includes('office.com')) return 'work';
     if (domain.includes('slack.com') || domain.includes('discord.com')) return 'work';
     if (domain.includes('zoom.us') || domain.includes('teams')) return 'work';
+    if (domain.includes('atlassian.net') || domain.includes('sironagenomics.com')) return 'work';
     
     if (domain.includes('twitter') || domain.includes('x.com')) return 'social';
     if (domain.includes('linkedin') || domain.includes('facebook')) return 'social';

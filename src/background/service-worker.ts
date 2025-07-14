@@ -68,11 +68,29 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
 
       case 'UPDATE_USER_SETTINGS':
         await storageManager.setUserSettings(message.data);
-        // Settings saved successfully
         
-                  // Verify the save by reading back
-          await storageManager.getUserSettings();
-          // Verified saved settings
+        // If pet type changed, update the pet state
+        const existingPetState = await storageManager.getPetState();
+        if (existingPetState && existingPetState.type !== message.data.petType) {
+          console.log('focusPet: Pet type changed from', existingPetState.type, 'to', message.data.petType);
+          existingPetState.type = message.data.petType;
+          existingPetState.name = message.data.petName;
+          await storageManager.setPetState(existingPetState);
+          
+          // Sync pet state to all tabs
+          const tabs = await chrome.tabs.query({});
+          tabs.forEach(tab => {
+            if (tab.id) {
+              chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' }).catch(() => {
+                // Ignore errors for tabs that don't have content script
+              });
+            }
+          });
+        }
+        
+        // Verify the save by reading back
+        await storageManager.getUserSettings();
+        // Verified saved settings
         
         sendResponse({ success: true });
         break;
@@ -143,12 +161,31 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
         break;
 
       case 'FEED_PET':
+        console.log('focusPet: Service worker FEED_PET handler called');
         const feedingPetState = await storageManager.getPetState();
+        console.log('focusPet: Current pet state in service worker:', {
+          treats: feedingPetState?.treats,
+          happiness: feedingPetState?.happiness,
+          satiety: feedingPetState?.satiety,
+          energy: feedingPetState?.energy
+        });
+        
         if (feedingPetState && feedingPetState.treats > 0) {
           feedingPetState.treats--;
+          const oldHappiness = feedingPetState.happiness;
+          const oldSatiety = feedingPetState.satiety;
+          
           feedingPetState.happiness = Math.min(100, feedingPetState.happiness + 15);
           feedingPetState.satiety = Math.min(100, feedingPetState.satiety + 20);
+          
+          console.log('focusPet: Service worker feeding updates:', {
+            treats: `${feedingPetState.treats + 1} -> ${feedingPetState.treats}`,
+            happiness: `${oldHappiness} -> ${feedingPetState.happiness}`,
+            satiety: `${oldSatiety} -> ${feedingPetState.satiety}`
+          });
+          
           await storageManager.setPetState(feedingPetState);
+          console.log('focusPet: Service worker storage update completed');
           
           // Sync pet state to all tabs
           const tabs = await chrome.tabs.query({});
@@ -159,6 +196,9 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
               });
             }
           });
+          console.log('focusPet: Service worker sent SYNC_PET_STATE to all tabs');
+        } else {
+          console.log('focusPet: Service worker - no treats available or no pet state');
         }
         sendResponse({ success: true });
         break;
@@ -350,13 +390,38 @@ chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIn
   }
 });
 
-// Handle tab updates to sync pet state
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+// Handle tab updates to sync pet state and initialize tracking
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
     // Sync pet state to new tab
     chrome.tabs.sendMessage(tabId, { type: 'SYNC_PET_STATE' }).catch(() => {
       // Ignore errors for tabs that don't have content script
     });
+    
+    // Initialize content analyzer tracking for this tab
+    try {
+      await contentAnalyzer.handleTabUpdate(tabId, tab);
+    } catch (error) {
+      console.error('focusPet: Error initializing tab tracking:', error);
+    }
+  }
+});
+
+// Handle tab activation for content analyzer
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  try {
+    await contentAnalyzer.handleTabActivation(activeInfo.tabId);
+  } catch (error) {
+    console.error('focusPet: Error handling tab activation:', error);
+  }
+});
+
+// Handle tab removal for content analyzer
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  try {
+    await contentAnalyzer.handleTabRemoval(tabId);
+  } catch (error) {
+    console.error('focusPet: Error handling tab removal:', error);
   }
 });
 
@@ -396,9 +461,15 @@ async function trackFocusTime(): Promise<void> {
         const now = Date.now();
         const intervalMs = settings.focusTracking.treatRewardInterval * 60 * 1000;
         if (now - focusStats.lastTreatTime >= intervalMs) {
+          const timeSinceLastTreat = now - focusStats.lastTreatTime;
+          const timeSinceLastTreatSeconds = Math.floor(timeSinceLastTreat / 1000);
+          console.log('focusPet: Time since last treat:', timeSinceLastTreatSeconds, 'seconds');
+          console.log('focusPet: Treat reward interval met, awarding treat');
           const petState = await storageManager.getPetState();
           if (petState) {
+            console.log('focusPet: Current treats before award:', petState.treats);
             petState.treats += 1;
+            console.log('focusPet: Treats after award:', petState.treats);
             await storageManager.setPetState(petState);
 
             // Sync pet state to all tabs (including popup)

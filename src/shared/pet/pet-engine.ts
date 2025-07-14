@@ -28,7 +28,7 @@ const PET_RESPONSES = {
       pet: [
         "Purrrr! That feels so good! 😸",
         "Meow! I love your attention! 🐱",
-        "More pets please! 💕"
+        "WAS'UP! 💕"
       ],
       feed: [
         "Meow! Thank you for the treat! 😸",
@@ -70,7 +70,7 @@ const PET_RESPONSES = {
     ],
     interactions: {
       pet: [
-        "Woof! I love pets! 🐕",
+        "WAS'UP, DOING GOOD? 🐕",
         "Wag wag! More please! 🐶",
         "You're the best! I love you!"
       ],
@@ -204,7 +204,7 @@ const PET_RESPONSES = {
       pet: [
         "Hop! I love pets! 🐰",
         "You're so gentle! 🥕",
-        "More pets please!"
+        "I love you, Jing!💕"
       ],
       feed: [
         "Hop! Thank you for the treat! 🐰",
@@ -245,13 +245,35 @@ export class PetEngine {
 
   // Update pet state
   async updatePetState(updates: Partial<PetState>): Promise<void> {
+    console.log('focusPet: updatePetState() called with updates:', updates);
+    console.log('focusPet: Pet state before update:', {
+      happiness: this.petState.happiness,
+      satiety: this.petState.satiety,
+      energy: this.petState.energy,
+      treats: this.petState.treats
+    });
+    
     this.petState = { ...this.petState, ...updates };
+    
+    console.log('focusPet: Pet state after merge:', {
+      happiness: this.petState.happiness,
+      satiety: this.petState.satiety,
+      energy: this.petState.energy,
+      treats: this.petState.treats
+    });
+    
     try {
+      console.log('focusPet: Calling storageManager.setPetState');
       await storageManager.setPetState(this.petState);
+      console.log('focusPet: Storage update completed successfully');
     } catch (error) {
+      console.error('focusPet: Error in storage update:', error);
       // Continue with local state update even if storage fails
     }
+    
+    console.log('focusPet: Calling updateMood()');
     this.updateMood();
+    console.log('focusPet: updatePetState() completed');
   }
 
   // Animation management
@@ -330,36 +352,61 @@ export class PetEngine {
   }
 
   async feedPet(): Promise<void> {
+    console.log('focusPet: feedPet() called');
+    console.log('focusPet: Current pet state before feeding:', {
+      treats: this.petState.treats,
+      happiness: this.petState.happiness,
+      satiety: this.petState.satiety,
+      energy: this.petState.energy
+    });
+    
     if (this.petState.treats > 0) {
       this.petState.treats--;
+      console.log('focusPet: Treats after decrement:', this.petState.treats);
       
       // Only increase happiness if it's not already at max
       if (this.petState.happiness < 100) {
         this.petState.happiness = Math.min(100, this.petState.happiness + 15);
+        console.log('focusPet: Happiness increased to:', this.petState.happiness);
+      } else {
+        console.log('focusPet: Happiness already at max (100)');
       }
 
       // Only increase satiety if it's not already at max
       if (this.petState.satiety < 100) {
         this.petState.satiety = Math.min(100, this.petState.satiety + 15);
+        console.log('focusPet: Satiety increased to:', this.petState.satiety);
+      } else {
+        console.log('focusPet: Satiety already at max (100)');
       }
     
+      console.log('focusPet: Pet state after feeding:', {
+        treats: this.petState.treats,
+        happiness: this.petState.happiness,
+        satiety: this.petState.satiety,
+        energy: this.petState.energy
+      });
       
       this.setAnimation('excited');
       this.speak('feed');
       
       try {
+        console.log('focusPet: Calling updatePetState with feeding updates');
         await this.updatePetState({
           treats: this.petState.treats,
           happiness: this.petState.happiness,
           satiety: this.petState.satiety
         });
+        console.log('focusPet: updatePetState completed successfully');
       } catch (error) {
-        // Silent error handling
+        console.error('focusPet: Error in updatePetState during feeding:', error);
       }
 
       setTimeout(() => {
         this.setAnimation('idle');
       }, 3000);
+    } else {
+      console.log('focusPet: No treats available to feed');
     }
   }
 
@@ -402,9 +449,19 @@ export class PetEngine {
     const now = Date.now();
     const timeSinceInteraction = now - this.petState.lastInteraction;
 
+    console.log('focusPet: updatePetBehavior() called');
+    console.log('focusPet: Current pet state in behavior loop:', {
+      happiness: this.petState.happiness,
+      satiety: this.petState.satiety,
+      energy: this.petState.energy,
+      timeSinceInteraction: Math.floor(timeSinceInteraction / 1000) + 's'
+    });
+
     // Decrease happiness over time if not interacted with
     if (timeSinceInteraction > 300000) { // 5 minutes
+      const oldHappiness = this.petState.happiness;
       this.petState.happiness = Math.max(0, this.petState.happiness - 2);
+      console.log(`focusPet: Happiness decreased from ${oldHappiness} to ${this.petState.happiness} (inactive for ${Math.floor(timeSinceInteraction / 1000)}s)`);
     }
 
     // Nap after 5 minutes of inactivity
@@ -417,11 +474,19 @@ export class PetEngine {
       // Energy restoration while napping
       const idleMinutes = Math.floor(timeSinceInteraction / 60000);
       const energyGain = Math.min(3, idleMinutes); // Max 3 energy per 30-second cycle
+      const oldEnergy = this.petState.energy;
       this.petState.energy = Math.min(100, this.petState.energy + energyGain);
+      if (oldEnergy !== this.petState.energy) {
+        console.log(`focusPet: Energy increased from ${oldEnergy} to ${this.petState.energy} while napping`);
+      }
       // Do NOT perform random behaviors while napping
     } else {
       // Decrease energy if recently interacted with (pet is active)
+      const oldEnergy = this.petState.energy;
       this.petState.energy = Math.max(0, this.petState.energy - 1);
+      if (oldEnergy !== this.petState.energy) {
+        console.log(`focusPet: Energy decreased from ${oldEnergy} to ${this.petState.energy} (active pet)`);
+      }
       // Return to idle if was napping but now active
       if (this.petState.currentAnimation === 'nap') {
         this.setAnimation('idle');
@@ -432,21 +497,36 @@ export class PetEngine {
       }
     }
 
-    // Decrease satiety over time (pet gets hungry)
-    this.petState.satiety = Math.max(0, this.petState.satiety - 1);
+    // Decrease satiety over time (pet gets hungry) - slower rate
+    // Only decrease satiety every 2 minutes (4 cycles) to make it last longer
+    const cyclesSinceLastDecrease = Math.floor((now - (this.petState.lastSatietyDecrease || now)) / 30000);
+    if (cyclesSinceLastDecrease >= 4) { // Every 2 minutes (4 * 30 seconds)
+      const oldSatiety = this.petState.satiety;
+      this.petState.satiety = Math.max(0, this.petState.satiety - 1);
+      this.petState.lastSatietyDecrease = now;
+      console.log(`focusPet: Satiety decreased from ${oldSatiety} to ${this.petState.satiety} (cycles since last decrease: ${cyclesSinceLastDecrease})`);
+    }
 
     // Update mood based on stats
     this.updateMood();
 
+    console.log('focusPet: Pet state after behavior updates:', {
+      happiness: this.petState.happiness,
+      satiety: this.petState.satiety,
+      energy: this.petState.energy
+    });
+
     try {
+      console.log('focusPet: Calling updatePetState from behavior loop');
       await this.updatePetState({
         happiness: this.petState.happiness,
         energy: this.petState.energy,
         satiety: this.petState.satiety,
         mood: this.petState.mood
       });
+      console.log('focusPet: Behavior loop updatePetState completed');
     } catch (error) {
-      // Silent error handling
+      console.error('focusPet: Error in behavior loop updatePetState:', error);
     }
   }
 

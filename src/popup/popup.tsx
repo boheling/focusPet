@@ -90,6 +90,7 @@ const Popup: React.FC<PopupProps> = () => {
           sendMessage('GET_REMINDERS')
         ]);
         console.log('Popup: Loaded pet data:', petData);
+        console.log('Popup: Pet treats count:', petData?.treats);
         console.log('Popup: Loaded settings from storage:', settingsData);
         console.log('Popup: Settings focusTracking:', settingsData?.focusTracking);
         setPetState(petData);

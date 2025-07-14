@@ -18,6 +18,7 @@ export interface PetState {
   position: Position;
   currentAnimation: PetAnimation;
   lastInteraction: number;
+  lastSatietyDecrease?: number; // timestamp of last satiety decrease
 }
 
 export interface Position {

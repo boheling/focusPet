@@ -203,6 +203,7 @@ export class StorageManager {
         position: { x: 100, y: 100 },
         currentAnimation: 'idle',
         lastInteraction: Date.now(),
+        lastSatietyDecrease: Date.now(),
       };
       await this.setPetState(defaultPetState);
     } else {
@@ -218,6 +219,13 @@ export class StorageManager {
         console.log('focusPet: Migrating hunger to satiety for existing pet');
         (petState as any).satiety = 100 - (petState as any).hunger;
         delete (petState as any).hunger;
+        await this.setPetState(petState);
+      }
+      
+      // Initialize lastSatietyDecrease for existing pets
+      if (!('lastSatietyDecrease' in petState)) {
+        console.log('focusPet: Adding lastSatietyDecrease to existing pet');
+        petState.lastSatietyDecrease = Date.now();
         await this.setPetState(petState);
       }
     }
