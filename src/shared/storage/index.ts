@@ -54,11 +54,100 @@ export class StorageManager {
 
   // Pet state management
   async getPetState(): Promise<PetState | null> {
-    return this.get<PetState>(STORAGE_KEYS.PET_STATE);
+    const petState = await this.get<PetState>(STORAGE_KEYS.PET_STATE);
+    
+    // Validate pet state and recover if corrupted
+    if (petState) {
+      const recoveredPetState = this.validateAndRecoverPetState(petState);
+      if (recoveredPetState !== petState) {
+        console.log('focusPet: Pet state was corrupted, recovered:', recoveredPetState);
+        await this.setPetState(recoveredPetState);
+        return recoveredPetState;
+      }
+    }
+    
+    return petState;
   }
 
   async setPetState(petState: PetState): Promise<void> {
-    await this.set(STORAGE_KEYS.PET_STATE, petState);
+    // Validate pet state before saving
+    const validatedPetState = this.validateAndRecoverPetState(petState);
+    await this.set(STORAGE_KEYS.PET_STATE, validatedPetState);
+  }
+
+  // Validate and recover pet state if corrupted
+  private validateAndRecoverPetState(petState: PetState): PetState {
+    const now = Date.now();
+    let needsRecovery = false;
+    
+    // Check for corrupted values (zero values that shouldn't be zero)
+    if (petState.happiness === 0 && petState.satiety === 0 && petState.energy === 0) {
+      console.warn('focusPet: Detected corrupted pet state with all zero values, recovering...');
+      needsRecovery = true;
+    }
+    
+    // Ensure minimum values for pet stats (set to reasonable defaults, not zero)
+    if (petState.happiness < 0) {
+      console.warn('focusPet: Invalid happiness value, setting to minimum');
+      petState.happiness = 50; // Set to reasonable minimum, not 0
+      needsRecovery = true;
+    }
+    
+    if (petState.satiety < 0) {
+      console.warn('focusPet: Invalid satiety value, setting to minimum');
+      petState.satiety = 50; // Set to reasonable minimum, not 0
+      needsRecovery = true;
+    }
+    
+    if (petState.energy < 0) {
+      console.warn('focusPet: Invalid energy value, setting to minimum');
+      petState.energy = 75; // Set to reasonable minimum, not 0
+      needsRecovery = true;
+    }
+    
+    if (petState.treats < 0) {
+      console.warn('focusPet: Invalid treats value, setting to minimum');
+      petState.treats = 3; // Set to reasonable minimum, not 0
+      needsRecovery = true;
+    }
+    
+    // If recovery is needed, set reasonable default values
+    if (needsRecovery) {
+      petState.happiness = Math.max(petState.happiness, 50);
+      petState.satiety = Math.max(petState.satiety, 50);
+      petState.energy = Math.max(petState.energy, 75);
+      petState.treats = Math.max(petState.treats, 3);
+      petState.lastInteraction = now;
+      petState.lastSatietyDecrease = now;
+      petState.mood = 'content';
+    }
+    
+    // Ensure required fields exist
+    if (!petState.unlockedAnimations) {
+      petState.unlockedAnimations = ['idle', 'walk', 'sit', 'nap'];
+    }
+    
+    if (!petState.accessories) {
+      petState.accessories = [];
+    }
+    
+    if (!petState.position) {
+      petState.position = { x: 100, y: 100 };
+    }
+    
+    if (!petState.currentAnimation) {
+      petState.currentAnimation = 'idle';
+    }
+    
+    if (!petState.lastInteraction) {
+      petState.lastInteraction = now;
+    }
+    
+    if (!petState.lastSatietyDecrease) {
+      petState.lastSatietyDecrease = now;
+    }
+    
+    return petState;
   }
 
   // User settings management

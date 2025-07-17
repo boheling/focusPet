@@ -58,11 +58,26 @@ class PetOverlay {
 
   private async loadPetState(): Promise<void> {
     this.petState = await storageManager.getPetState();
+    
     if (this.petState) {
+      // Validate pet state before using it
+      if (this.petState.happiness < 0 || this.petState.satiety < 0 || this.petState.energy < 0) {
+        console.warn('focusPet: Invalid pet state detected in content script, recovering...');
+        this.petState.happiness = Math.max(this.petState.happiness, 50); // Set to reasonable minimum, not 0
+        this.petState.satiety = Math.max(this.petState.satiety, 50); // Set to reasonable minimum, not 0
+        this.petState.energy = Math.max(this.petState.energy, 75); // Set to reasonable minimum, not 0
+        this.petState.treats = Math.max(this.petState.treats, 3); // Set to reasonable minimum, not 0
+        
+        // Save the recovered state
+        await storageManager.setPetState(this.petState);
+      }
+      
       // Update last interaction when overlay is initialized on a new page
       // This prevents the pet from immediately napping when navigating
       this.petState.lastInteraction = Date.now();
       this.petEngine = new PetEngine(this.petState);
+    } else {
+      console.warn('focusPet: No pet state found in storage');
     }
   }
 
@@ -114,16 +129,24 @@ class PetOverlay {
         this.reloadPetState().then(() => {
           sendResponse({ success: true });
         }).catch((error) => {
-          console.error('Error reloading pet state:', error);
+          console.error('focusPet: Error reloading pet state:', error);
           sendResponse({ success: false, error: error.message });
         });
         return true; // Keep message channel open for async response
       } else if (message.type === 'TRIGGER_AI_RESPONSE') {
-        console.log('focusPet: Overlay received TRIGGER_AI_RESPONSE');
         if (this.petEngine) {
           this.petEngine.generateAIResponse();
         }
         sendResponse({ success: true });
+      }
+    });
+
+    // Listen for storage changes as a fallback for message passing
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+      if (namespace === 'local' && changes.petState) {
+        this.reloadPetState().catch((error) => {
+          console.error('focusPet: Error reloading pet state from storage change:', error);
+        });
       }
     });
 
@@ -544,7 +567,20 @@ class PetOverlay {
   // Reload pet state from storage (for sync with popup)
   public async reloadPetState(): Promise<void> {
     await this.loadPetState();
+    
     if (this.petEngine && this.petState) {
+      // Validate pet state after reloading
+      if (this.petState.happiness < 0 || this.petState.satiety < 0 || this.petState.energy < 0) {
+        console.warn('focusPet: Invalid pet state detected after reload, recovering...');
+        this.petState.happiness = Math.max(this.petState.happiness, 50); // Set to reasonable minimum, not 0
+        this.petState.satiety = Math.max(this.petState.satiety, 50); // Set to reasonable minimum, not 0
+        this.petState.energy = Math.max(this.petState.energy, 75); // Set to reasonable minimum, not 0
+        this.petState.treats = Math.max(this.petState.treats, 3); // Set to reasonable minimum, not 0
+        
+        // Save the recovered state
+        await storageManager.setPetState(this.petState);
+      }
+      
       // Update last interaction when reloading pet state
       this.petState.lastInteraction = Date.now();
       this.petEngine = new PetEngine(this.petState);

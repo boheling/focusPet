@@ -161,44 +161,64 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
         break;
 
       case 'FEED_PET':
-        console.log('focusPet: Service worker FEED_PET handler called');
         const feedingPetState = await storageManager.getPetState();
-        console.log('focusPet: Current pet state in service worker:', {
-          treats: feedingPetState?.treats,
-          happiness: feedingPetState?.happiness,
-          satiety: feedingPetState?.satiety,
-          energy: feedingPetState?.energy
-        });
         
         if (feedingPetState && feedingPetState.treats > 0) {
-          feedingPetState.treats--;
-          const oldHappiness = feedingPetState.happiness;
-          const oldSatiety = feedingPetState.satiety;
+          // Store original values for logging
+          const originalTreats = feedingPetState.treats;
+          const originalHappiness = feedingPetState.happiness;
+          const originalSatiety = feedingPetState.satiety;
           
+          // Validate pet state before feeding
+          if (feedingPetState.happiness < 0 || feedingPetState.satiety < 0 || feedingPetState.energy < 0) {
+            console.warn('focusPet: Invalid pet state detected during feeding, recovering...');
+            feedingPetState.happiness = Math.max(feedingPetState.happiness, 50); // Set to reasonable minimum, not 0
+            feedingPetState.satiety = Math.max(feedingPetState.satiety, 50); // Set to reasonable minimum, not 0
+            feedingPetState.energy = Math.max(feedingPetState.energy, 75); // Set to reasonable minimum, not 0
+          }
+          
+          feedingPetState.treats--;
           feedingPetState.happiness = Math.min(100, feedingPetState.happiness + 15);
           feedingPetState.satiety = Math.min(100, feedingPetState.satiety + 20);
           
-          console.log('focusPet: Service worker feeding updates:', {
-            treats: `${feedingPetState.treats + 1} -> ${feedingPetState.treats}`,
-            happiness: `${oldHappiness} -> ${feedingPetState.happiness}`,
-            satiety: `${oldSatiety} -> ${feedingPetState.satiety}`
+          console.log('focusPet: Feeding pet -', {
+            treats: `${originalTreats} → ${feedingPetState.treats}`,
+            happiness: `${originalHappiness} → ${feedingPetState.happiness}`,
+            satiety: `${originalSatiety} → ${feedingPetState.satiety}`
           });
           
-          await storageManager.setPetState(feedingPetState);
-          console.log('focusPet: Service worker storage update completed');
-          
-          // Sync pet state to all tabs
-          const tabs = await chrome.tabs.query({});
-          tabs.forEach(tab => {
-            if (tab.id) {
-              chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' }).catch(() => {
-                // Ignore errors for tabs that don't have content script
-              });
+          try {
+            await storageManager.setPetState(feedingPetState);
+            
+            // Sync pet state to all tabs
+            const tabs = await chrome.tabs.query({});
+            let successfulSyncs = 0;
+            let failedSyncs = 0;
+            
+            for (const tab of tabs) {
+              if (tab.id) {
+                try {
+                  await chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' });
+                  successfulSyncs++;
+                } catch (error) {
+                  failedSyncs++;
+                  // This is normal for tabs without content scripts
+                }
+              }
             }
-          });
-          console.log('focusPet: Service worker sent SYNC_PET_STATE to all tabs');
+            
+            if (successfulSyncs > 0) {
+              console.log(`focusPet: Synced to ${successfulSyncs} tab(s)`);
+            } else {
+              console.log('focusPet: No tabs synced, using storage fallback');
+              await storageManager.syncAcrossTabs();
+            }
+            
+          } catch (error) {
+            console.error('focusPet: Error during feeding:', error);
+          }
         } else {
-          console.log('focusPet: Service worker - no treats available or no pet state');
+          console.log('focusPet: No treats available');
         }
         sendResponse({ success: true });
         break;
