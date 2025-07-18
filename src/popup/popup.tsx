@@ -80,6 +80,7 @@ const Popup: React.FC<PopupProps> = () => {
   const [analyticsSummary, setAnalyticsSummary] = useState<any | null>(null);
   const [currentStory, setCurrentStory] = useState<any | null>(null);
   const [stories, setStories] = useState<any[]>([]);
+  const [syncTimeout] = useState<NodeJS.Timeout | null>(null); // Track sync timeout for cleanup
 
   const loadData = useCallback(async () => {
     if (isExtension) {
@@ -120,7 +121,14 @@ const Popup: React.FC<PopupProps> = () => {
       const handleMessage = (message: any) => {
         console.log('Popup: Received message:', message);
         if (message.type === 'SYNC_PET_STATE') {
-          console.log('Popup: Received SYNC_PET_STATE message, refreshing data');
+          console.log('Popup: Received SYNC_PET_STATE message, reloading immediately');
+          
+          // Clear existing timeout
+          if (syncTimeout) {
+            clearTimeout(syncTimeout);
+          }
+          
+          // Reload immediately for state changes
           loadData();
         }
       };
@@ -129,9 +137,13 @@ const Popup: React.FC<PopupProps> = () => {
       
       return () => {
         chrome.runtime.onMessage.removeListener(handleMessage);
+        // Clean up timeout on unmount
+        if (syncTimeout) {
+          clearTimeout(syncTimeout);
+        }
       };
     }
-  }, [isExtension, loadData]);
+  }, [isExtension, loadData, syncTimeout]);
 
   const sendMessage = (type: string, data?: any): Promise<any> => {
     return new Promise((resolve, reject) => {

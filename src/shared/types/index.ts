@@ -25,6 +25,8 @@ export interface PetState {
     userPreferences: string[];
     learnedBehaviors: string[];
   };
+  version?: number; // Version control for state synchronization
+  lastUpdate?: number; // Timestamp of last state update
 }
 
 export interface Position {

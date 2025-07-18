@@ -4,6 +4,10 @@ import { contentAnalyzer } from '@shared/analytics/content-analyzer';
 import { StoryGenerator } from '@shared/analytics/story-generator';
 import { FocusLevel, ActivityType } from '@shared/analytics/types';
 
+// Feeding lock to prevent race conditions
+let feedingLock = false;
+let feedingLockTimeout: ReturnType<typeof setTimeout> | null = null;
+
 // Initialize content analyzer (browsing activity tracking)
 // This will start tracking as soon as the service worker loads
 // No need to call any methods, the constructor handles setup
@@ -161,66 +165,104 @@ async function handleMessage(message: any, _sender: any, sendResponse: any) {
         break;
 
       case 'FEED_PET':
-        const feedingPetState = await storageManager.getPetState();
+        // Check if feeding is already in progress
+        if (feedingLock) {
+          console.log('focusPet: Feeding already in progress, skipping...');
+          sendResponse({ success: false, error: 'Feeding already in progress' });
+          return;
+        }
+
+        // Set feeding lock
+        feedingLock = true;
         
-        if (feedingPetState && feedingPetState.treats > 0) {
-          // Store original values for logging
-          const originalTreats = feedingPetState.treats;
-          const originalHappiness = feedingPetState.happiness;
-          const originalSatiety = feedingPetState.satiety;
+        // Clear any existing timeout
+        if (feedingLockTimeout) {
+          clearTimeout(feedingLockTimeout);
+        }
+        
+        // Auto-release lock after 5 seconds
+        feedingLockTimeout = setTimeout(() => {
+          feedingLock = false;
+          feedingLockTimeout = null;
+        }, 5000);
+
+        try {
+          const feedingPetState = await storageManager.getPetState();
           
-          // Validate pet state before feeding
-          if (feedingPetState.happiness < 0 || feedingPetState.satiety < 0 || feedingPetState.energy < 0) {
-            console.warn('focusPet: Invalid pet state detected during feeding, recovering...');
-            feedingPetState.happiness = Math.max(feedingPetState.happiness, 50); // Set to reasonable minimum, not 0
-            feedingPetState.satiety = Math.max(feedingPetState.satiety, 50); // Set to reasonable minimum, not 0
-            feedingPetState.energy = Math.max(feedingPetState.energy, 75); // Set to reasonable minimum, not 0
-          }
-          
-          feedingPetState.treats--;
-          feedingPetState.happiness = Math.min(100, feedingPetState.happiness + 15);
-          feedingPetState.satiety = Math.min(100, feedingPetState.satiety + 20);
-          
-          console.log('focusPet: Feeding pet -', {
-            treats: `${originalTreats} → ${feedingPetState.treats}`,
-            happiness: `${originalHappiness} → ${feedingPetState.happiness}`,
-            satiety: `${originalSatiety} → ${feedingPetState.satiety}`
-          });
-          
-          try {
-            await storageManager.setPetState(feedingPetState);
+          if (feedingPetState && feedingPetState.treats > 0) {
+            // Store original values for logging
+            const originalTreats = feedingPetState.treats;
+            const originalHappiness = feedingPetState.happiness;
+            const originalSatiety = feedingPetState.satiety;
             
-            // Sync pet state to all tabs
-            const tabs = await chrome.tabs.query({});
-            let successfulSyncs = 0;
-            let failedSyncs = 0;
+            // Validate pet state before feeding
+            if (feedingPetState.happiness < 0 || feedingPetState.satiety < 0 || feedingPetState.energy < 0) {
+              console.warn('focusPet: Invalid pet state detected during feeding, recovering...');
+              feedingPetState.happiness = Math.max(feedingPetState.happiness, 50); // Set to reasonable minimum, not 0
+              feedingPetState.satiety = Math.max(feedingPetState.satiety, 50); // Set to reasonable minimum, not 0
+              feedingPetState.energy = Math.max(feedingPetState.energy, 75); // Set to reasonable minimum, not 0
+            }
             
-            for (const tab of tabs) {
-              if (tab.id) {
-                try {
-                  await chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' });
-                  successfulSyncs++;
-                } catch (error) {
-                  failedSyncs++;
-                  // This is normal for tabs without content scripts
+            // Use atomic update with version control
+            const updates = {
+              treats: feedingPetState.treats - 1,
+              happiness: Math.min(100, feedingPetState.happiness + 15),
+              satiety: Math.min(100, feedingPetState.satiety + 20)
+            };
+            
+            console.log('focusPet: Feeding pet -', {
+              treats: `${originalTreats} → ${updates.treats}`,
+              happiness: `${originalHappiness} → ${updates.happiness}`,
+              satiety: `${originalSatiety} → ${updates.satiety}`
+            });
+            
+            const success = await storageManager.updatePetStateAtomic(updates);
+            
+            if (success) {
+              // Sync pet state to all tabs
+              const tabs = await chrome.tabs.query({});
+              let successfulSyncs = 0;
+              let failedSyncs = 0;
+              
+              for (const tab of tabs) {
+                if (tab.id) {
+                  try {
+                    await chrome.tabs.sendMessage(tab.id, { type: 'SYNC_PET_STATE' });
+                    successfulSyncs++;
+                  } catch (error) {
+                    failedSyncs++;
+                    // This is normal for tabs without content scripts
+                  }
                 }
               }
-            }
-            
-            if (successfulSyncs > 0) {
-              console.log(`focusPet: Synced to ${successfulSyncs} tab(s)`);
+              
+              if (successfulSyncs > 0) {
+                console.log(`focusPet: Synced to ${successfulSyncs} tab(s)`);
+              } else {
+                console.log('focusPet: No tabs synced, using storage fallback');
+                await storageManager.syncAcrossTabs();
+              }
+              
+              sendResponse({ success: true });
             } else {
-              console.log('focusPet: No tabs synced, using storage fallback');
-              await storageManager.syncAcrossTabs();
+              console.log('focusPet: Feeding failed due to version conflict');
+              sendResponse({ success: false, error: 'State conflict, please try again' });
             }
-            
-          } catch (error) {
-            console.error('focusPet: Error during feeding:', error);
+          } else {
+            console.log('focusPet: No treats available');
+            sendResponse({ success: false, error: 'No treats available' });
           }
-        } else {
-          console.log('focusPet: No treats available');
+        } catch (error) {
+          console.error('focusPet: Error during feeding:', error);
+          sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+        } finally {
+          // Release feeding lock
+          feedingLock = false;
+          if (feedingLockTimeout) {
+            clearTimeout(feedingLockTimeout);
+            feedingLockTimeout = null;
+          }
         }
-        sendResponse({ success: true });
         break;
 
 

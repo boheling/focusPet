@@ -14,6 +14,7 @@ class PetOverlay {
     show: false,
     timer: 0
   };
+  private feedingInProgress: boolean = false; // Prevent multiple simultaneous feedings
 
   constructor() {
     this.canvas = this.createCanvas();
@@ -68,8 +69,13 @@ class PetOverlay {
         this.petState.energy = Math.max(this.petState.energy, 75); // Set to reasonable minimum, not 0
         this.petState.treats = Math.max(this.petState.treats, 3); // Set to reasonable minimum, not 0
         
-        // Save the recovered state
-        await storageManager.setPetState(this.petState);
+        // Save the recovered state using atomic update
+        await storageManager.updatePetStateAtomic({
+          happiness: this.petState.happiness,
+          satiety: this.petState.satiety,
+          energy: this.petState.energy,
+          treats: this.petState.treats
+        });
       }
       
       // Update last interaction when overlay is initialized on a new page
@@ -553,8 +559,22 @@ class PetOverlay {
   }
 
   public feedPet(): void {
+    if (this.feedingInProgress) {
+      console.log('focusPet: Feeding already in progress, skipping...');
+      return;
+    }
+
+    this.feedingInProgress = true;
+    
     if (this.petEngine) {
-      this.petEngine.feedPet();
+      this.petEngine.feedPet().finally(() => {
+        // Release lock after feeding completes (success or error)
+        setTimeout(() => {
+          this.feedingInProgress = false;
+        }, 1000); // Small delay to prevent rapid clicking
+      });
+    } else {
+      this.feedingInProgress = false;
     }
   }
 

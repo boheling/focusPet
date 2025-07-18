@@ -3,8 +3,15 @@ import { StoryData } from '../analytics/story-generator';
 
 export class StorageManager {
   private static instance: StorageManager;
+  private contextValid: boolean = true;
+  private contextCheckTimer: NodeJS.Timeout | null = null;
+  private stateVersion: number = 0; // Version control for state changes
+  private stateLock: boolean = false; // Prevent concurrent state updates
+  private lastStateUpdate: number = 0; // Track last state update time
 
-  private constructor() {}
+  private constructor() {
+    this.startContextCheck();
+  }
 
   static getInstance(): StorageManager {
     if (!StorageManager.instance) {
@@ -52,7 +59,7 @@ export class StorageManager {
     }
   }
 
-  // Pet state management
+  // Pet state management with version control and locking
   async getPetState(): Promise<PetState | null> {
     const petState = await this.get<PetState>(STORAGE_KEYS.PET_STATE);
     
@@ -70,9 +77,97 @@ export class StorageManager {
   }
 
   async setPetState(petState: PetState): Promise<void> {
+    // Prevent concurrent state updates
+    if (this.stateLock) {
+      console.log('focusPet: State update blocked - another update in progress');
+      return;
+    }
+
     // Validate pet state before saving
     const validatedPetState = this.validateAndRecoverPetState(petState);
-    await this.set(STORAGE_KEYS.PET_STATE, validatedPetState);
+    
+    // Add version control
+    validatedPetState.version = (validatedPetState.version || 0) + 1;
+    validatedPetState.lastUpdate = Date.now();
+    
+    this.stateLock = true;
+    this.lastStateUpdate = Date.now();
+    
+    try {
+      await this.set(STORAGE_KEYS.PET_STATE, validatedPetState);
+      this.stateVersion = validatedPetState.version;
+      console.log('focusPet: Pet state updated successfully, version:', this.stateVersion);
+    } catch (error) {
+      console.error('focusPet: Error setting pet state:', error);
+      throw error;
+    } finally {
+      // Release lock after a short delay to prevent rapid successive updates
+      setTimeout(() => {
+        this.stateLock = false;
+      }, 100);
+    }
+  }
+
+  // Atomic state update - only update if current version matches
+  async updatePetStateAtomic(updates: Partial<PetState>, expectedVersion?: number): Promise<boolean> {
+    const currentState = await this.getPetState();
+    if (!currentState) {
+      console.warn('focusPet: No current pet state to update');
+      return false;
+    }
+
+    // Check version if provided
+    if (expectedVersion !== undefined && currentState.version !== expectedVersion) {
+      console.log('focusPet: Version mismatch, skipping update. Expected:', expectedVersion, 'Current:', currentState.version);
+      return false;
+    }
+
+    // Apply updates
+    const updatedState = { ...currentState, ...updates };
+    await this.setPetState(updatedState);
+    return true;
+  }
+
+  // Get current state version for optimistic updates
+  getCurrentStateVersion(): number {
+    return this.stateVersion;
+  }
+
+  // Check if state was recently updated by another tab
+  isStateRecentlyUpdated(): boolean {
+    const timeSinceUpdate = Date.now() - this.lastStateUpdate;
+    return timeSinceUpdate < 5000; // 5 seconds
+  }
+
+  // Context validity management
+  private startContextCheck(): void {
+    this.contextCheckTimer = setInterval(() => {
+      if (!this.contextValid) {
+        this.checkContextValidity();
+      }
+    }, 60000); // Check every minute
+  }
+
+  private async checkContextValidity(): Promise<void> {
+    try {
+      await chrome.storage.local.get('test');
+      this.contextValid = true;
+      console.log('focusPet: Extension context restored');
+    } catch (error) {
+      console.log('focusPet: Extension context still invalid');
+    }
+  }
+
+  isContextValid(): boolean {
+    return this.contextValid;
+  }
+
+  // Cleanup method
+  destroy(): void {
+    if (this.contextCheckTimer) {
+      clearInterval(this.contextCheckTimer);
+      this.contextCheckTimer = null;
+    }
   }
 
   // Validate and recover pet state if corrupted

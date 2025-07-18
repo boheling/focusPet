@@ -237,6 +237,7 @@ export class PetEngine {
   private aiResponseTimer: number | null = null;
   private lastAIResponse: number = 0;
   private aiResponseInterval: number = 300000; // 5 minutes between AI responses
+  private lastFeedingTime: number = 0; // Track when pet was last fed
 
   constructor(initialPetState: PetState) {
     this.petState = initialPetState;
@@ -250,7 +251,7 @@ export class PetEngine {
     return { ...this.petState };
   }
 
-  // Update pet state
+  // Update pet state with atomic updates and version control
   async updatePetState(updates: Partial<PetState>): Promise<void> {
     // Validate updates before applying
     const validatedUpdates = { ...updates };
@@ -271,20 +272,24 @@ export class PetEngine {
       validatedUpdates.treats = 3; // Set to reasonable minimum, not 0
     }
     
+    // Update local state first
     this.petState = { ...this.petState, ...validatedUpdates };
     
-    try {
-      await storageManager.setPetState(this.petState);
-    } catch (error) {
-      console.error('focusPet: Error in storage update:', error);
-      // Try to recover by re-reading the pet state
+    // Use atomic update with version control
+    const currentVersion = storageManager.getCurrentStateVersion();
+    const success = await storageManager.updatePetStateAtomic(validatedUpdates, currentVersion);
+    
+    if (!success) {
+      console.log('focusPet: State update failed due to version mismatch, reloading state');
+      // Reload state from storage if update failed
       try {
-        const recoveredPetState = await storageManager.getPetState();
-        if (recoveredPetState) {
-          this.petState = recoveredPetState;
+        const freshPetState = await storageManager.getPetState();
+        if (freshPetState) {
+          this.petState = freshPetState;
+          console.log('focusPet: State reloaded from storage');
         }
       } catch (recoveryError) {
-        console.error('focusPet: Error recovering pet state:', recoveryError);
+        console.error('focusPet: Error reloading pet state:', recoveryError);
       }
     }
     
@@ -380,6 +385,9 @@ export class PetEngine {
         this.petState.satiety = Math.min(100, this.petState.satiety + 15);
       }
     
+      // Track feeding time to prevent behavior loop from overriding
+      this.lastFeedingTime = Date.now();
+      
       this.setAnimation('excited');
       this.speak('feed');
       
@@ -445,6 +453,18 @@ export class PetEngine {
   private async updatePetBehavior(): Promise<void> {
     const now = Date.now();
     const timeSinceInteraction = now - this.petState.lastInteraction;
+    const timeSinceFeeding = now - this.lastFeedingTime;
+
+    // Don't override recent feeding changes (within 2 minutes)
+    if (timeSinceFeeding < 120000) { // 2 minutes
+      return; // Skip behavior updates if pet was recently fed
+    }
+
+    // Check if state was recently updated by another tab
+    if (storageManager.isStateRecentlyUpdated()) {
+      console.log('focusPet: Skipping behavior update - state recently updated by another tab');
+      return;
+    }
 
     // Validate current pet state before making changes
     if (this.petState.happiness < 0 || this.petState.satiety < 0 || this.petState.energy < 0) {
@@ -494,15 +514,21 @@ export class PetEngine {
     // Update mood based on stats
     this.updateMood();
 
-    try {
-      await this.updatePetState({
-        happiness: this.petState.happiness,
-        energy: this.petState.energy,
-        satiety: this.petState.satiety,
-        mood: this.petState.mood
-      });
-    } catch (error) {
-      console.error('focusPet: Error in behavior loop updatePetState:', error);
+    // Only update if changes are significant enough to warrant storage
+    // For behavior loop, we'll always update since we're making intentional changes
+    const hasSignificantChanges = true;
+
+    if (hasSignificantChanges) {
+      try {
+        await this.updatePetState({
+          happiness: this.petState.happiness,
+          energy: this.petState.energy,
+          satiety: this.petState.satiety,
+          mood: this.petState.mood
+        });
+      } catch (error) {
+        console.error('focusPet: Error in behavior loop updatePetState:', error);
+      }
     }
   }
 
